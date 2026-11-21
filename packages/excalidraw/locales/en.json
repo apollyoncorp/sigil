@@ -796,5 +796,8 @@
     "excalidrawPlusMcp": "Excalidraw+ MCP",
     "cli": "Excalidraw CLI",
     "cliTagline": "for humans & AI"
+  },
+  "sigil": {
+    "basedOnExcalidraw": "Based on Excalidraw"
   }
 }

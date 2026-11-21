@@ -1,4 +1,9 @@
-import { eyeIcon } from "@excalidraw/excalidraw/components/icons";
+import {
+  eyeIcon,
+  ExternalLinkIcon,
+  GithubIcon,
+} from "@excalidraw/excalidraw/components/icons";
+import { useI18n } from "@excalidraw/excalidraw/i18n";
 import { MainMenu } from "@excalidraw/excalidraw/index";
 import React from "react";
 
@@ -17,6 +22,7 @@ export const AppMainMenu: React.FC<{
   theme: Theme | "system";
   refresh: () => void;
 }> = React.memo((props) => {
+  const { t } = useI18n();
   return (
     <MainMenu>
       <MainMenu.DefaultItems.LoadScene />
@@ -34,7 +40,20 @@ export const AppMainMenu: React.FC<{
       <MainMenu.DefaultItems.Help />
       <MainMenu.DefaultItems.ClearCanvas />
       <MainMenu.Separator />
-      <MainMenu.DefaultItems.Socials />
+      <MainMenu.ItemLink
+        icon={GithubIcon}
+        href="https://github.com/apollyoncorp/sigil"
+        aria-label="GitHub"
+      >
+        GitHub
+      </MainMenu.ItemLink>
+      <MainMenu.ItemLink
+        icon={ExternalLinkIcon}
+        href="https://github.com/excalidraw/excalidraw"
+        aria-label={t("sigil.basedOnExcalidraw")}
+      >
+        {t("sigil.basedOnExcalidraw")}
+      </MainMenu.ItemLink>
       {isDevEnv() && (
         <MainMenu.Item
           icon={eyeIcon}

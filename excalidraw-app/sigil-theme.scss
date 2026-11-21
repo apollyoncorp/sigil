@@ -1,0 +1,37 @@
+// Sigil accent. Overrides the Excalidraw violet so the editor wears the
+// Apollyon palette without touching packages/.
+// "body" raises specificity above packages/excalidraw/css/theme.scss.
+body .excalidraw {
+  --color-selection: #c84f1a;
+  --color-primary: #c84f1a;
+  --color-primary-darker: #b54616;
+  --color-primary-darkest: #9a3b12;
+  --color-primary-light: #fde5d9;
+  --color-primary-light-darker: #fbd3c0;
+  --color-primary-hover: #b54616;
+  --color-primary-contrast-offset: #d0541d;
+  --color-logo-icon: var(--color-primary);
+  --color-surface-high: #fdf1eb;
+  --color-brand-hover: #b54616;
+  --color-brand-active: #9a3b12;
+  --color-on-primary-container: #4a1700;
+  --color-slider-track: #f8c9b2;
+  --color-surface-primary-container: #fbe0d2;
+
+  &.theme--dark {
+    --color-selection: #f2703a;
+    --color-primary: #f2703a;
+    --color-primary-darker: #f4824f;
+    --color-primary-darkest: #f69465;
+    --color-primary-light: #4a2a1d;
+    --color-primary-light-darker: #573120;
+    --color-primary-hover: #f58a5a;
+    --color-primary-contrast-offset: #f47a45;
+    --color-surface-high: #2c2320;
+    --color-brand-hover: #f58a5a;
+    --color-brand-active: #f69465;
+    --color-on-primary-container: #ffdccc;
+    --color-slider-track: #6b3a26;
+    --color-surface-primary-container: #573120;
+  }
+}

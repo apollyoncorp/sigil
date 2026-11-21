@@ -2,23 +2,24 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <title>Page not found | Excalidraw</title>
+    <title>Page not found | Sigil</title>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="robots" content="noindex" />
     <meta name="color-scheme" content="light dark" />
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
     <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <style>
       :root {
         --background: #ffffff;
         --text: #1b1b1f;
         --text-muted: #6b6b76;
-        --primary: #6965db;
-        --primary-hover: #5b57d1;
+        --primary: #c84f1a;
+        --primary-hover: #b54616;
         --on-primary: #ffffff;
-        --glow: rgba(105, 101, 219, 0.14);
+        --glow: rgba(242, 112, 58, 0.12);
         --grid: rgba(27, 27, 31, 0.07);
-        --cursor: #f76707;
+        --cursor: #8fb8de;
       }
 
       @media (prefers-color-scheme: dark) {
@@ -26,12 +27,12 @@
           --background: #121212;
           --text: #e3e3e8;
           --text-muted: #a0a0ab;
-          --primary: #a8a5ff;
-          --primary-hover: #b2aeff;
+          --primary: #f2703a;
+          --primary-hover: #f58a5a;
           --on-primary: #121212;
-          --glow: rgba(168, 165, 255, 0.13);
+          --glow: rgba(242, 112, 58, 0.12);
           --grid: rgba(227, 227, 232, 0.06);
-          --cursor: #ffa94d;
+          --cursor: #8fb8de;
         }
       }
 
@@ -187,32 +188,6 @@
         border-radius: 0.25rem;
       }
 
-      nav {
-        display: flex;
-        flex-wrap: wrap;
-        justify-content: center;
-        gap: 0.5rem 0.75rem;
-        margin-top: 1.5rem;
-        font-size: 0.9375rem;
-      }
-
-      nav span {
-        color: var(--text-muted);
-        opacity: 0.6;
-      }
-
-      nav a {
-        color: var(--text-muted);
-        text-decoration: none;
-        transition: color 0.15s;
-      }
-
-      nav a:hover {
-        color: var(--primary);
-        text-decoration: underline;
-        text-underline-offset: 0.2em;
-      }
-
       main > * {
         animation: rise 0.5s ease-out backwards;
       }
@@ -317,7 +292,7 @@
         </svg>
       </h1>
       <p>There is nothing at this address.</p>
-      <a class="button" href="/">Open Excalidraw</a>
+      <a class="button" href="/">Open Sigil</a>
     </main>
   </body>
 </html>

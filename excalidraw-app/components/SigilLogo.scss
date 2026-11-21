@@ -1,0 +1,40 @@
+.excalidraw {
+  .SigilLogo {
+    display: flex;
+    align-items: center;
+    gap: 0.6em;
+    font-size: 2.25rem;
+    color: var(--color-on-surface);
+  }
+
+  .SigilLogo__mark {
+    width: 1.15em;
+    height: 1.15em;
+  }
+
+  .SigilLogo__mark-down {
+    fill: #0a0b10;
+  }
+
+  .SigilLogo__mark-up {
+    fill: #f2703a;
+  }
+
+  // the wordmark box includes the descender of the "g"
+  .SigilLogo__wordmark {
+    height: 1.15em;
+    width: auto;
+    margin-top: 0.22em;
+    fill: currentColor;
+  }
+
+  &.theme--dark {
+    .SigilLogo {
+      color: #e8e2d6;
+    }
+
+    .SigilLogo__mark-down {
+      fill: #e8e2d6;
+    }
+  }
+}
