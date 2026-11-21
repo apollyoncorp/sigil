@@ -163,8 +163,11 @@ export class ExcalidrawFontFace {
       });
     }
 
-    // fallback url for bundled fonts
-    urls.push(new URL(assetUrl, ExcalidrawFontFace.ASSETS_FALLBACK_URL));
+    // fallback url for bundled fonts (Sigil: only when no asset path is set,
+    // so an app that serves its own fonts never asks a third-party CDN)
+    if (!urls.length) {
+      urls.push(new URL(assetUrl, ExcalidrawFontFace.ASSETS_FALLBACK_URL));
+    }
 
     return urls;
   }
