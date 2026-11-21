@@ -20,6 +20,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { atom, useAtom, useAtomValue } from "../app-jotai";
 import { activeRoomLinkAtom } from "../collab/Collab";
+import { isShareLinkConfigured } from "../features";
 
 import "./ShareDialog.scss";
 import { QRCode } from "./QRCode";
@@ -206,7 +207,7 @@ const ShareDialogPicker = (props: ShareDialogProps) => {
         />
       </div>
 
-      {props.type === "share" && (
+      {props.type === "share" && isShareLinkConfigured && (
         <div className="ShareDialog__separator">
           <span>{t("shareDialog.or")}</span>
         </div>
@@ -218,7 +219,7 @@ const ShareDialogPicker = (props: ShareDialogProps) => {
     <>
       {startCollabJSX}
 
-      {props.type === "share" && (
+      {props.type === "share" && isShareLinkConfigured && (
         <>
           <div className="ShareDialog__picker__header">
             {t("exportDialog.link_title")}

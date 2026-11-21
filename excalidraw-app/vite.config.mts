@@ -273,7 +273,7 @@ export default defineConfig(({ mode }) => {
     },
     plugins: [
       Sitemap({
-        hostname: "https://excalidraw.com",
+        hostname: "https://sigil.apollyoncorp.com",
         outDir: "build",
         exclude: ["/404"],
         changefreq: "monthly",

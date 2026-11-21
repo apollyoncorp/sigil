@@ -203,6 +203,11 @@ export const importFromBackend = async (
   id: string,
   decryptionKey: string,
 ): Promise<ImportedDataState> => {
+  if (!BACKEND_V2_GET) {
+    // Sigil: shareable links are off unless a backend is configured
+    window.alert(t("alerts.importBackendFailed"));
+    return {};
+  }
   try {
     const response = await fetch(`${BACKEND_V2_GET}${id}`);
 

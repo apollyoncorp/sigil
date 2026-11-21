@@ -13,6 +13,10 @@ const LibraryMenuBrowseButton = ({
   theme: UIAppState["theme"];
   id: string;
 }) => {
+  // Sigil: no catalog configured, no browse link
+  if (!import.meta.env.VITE_APP_LIBRARY_URL) {
+    return null;
+  }
   const referrer =
     libraryReturnUrl || window.location.origin + window.location.pathname;
   return (

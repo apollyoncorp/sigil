@@ -36,7 +36,10 @@ import type { UploadMetadata } from "firebase/storage";
 
 let FIREBASE_CONFIG: Record<string, any>;
 try {
-  FIREBASE_CONFIG = JSON.parse(import.meta.env.VITE_APP_FIREBASE_CONFIG);
+  // Sigil: Firebase is optional, so an empty value is not an error
+  FIREBASE_CONFIG = import.meta.env.VITE_APP_FIREBASE_CONFIG
+    ? JSON.parse(import.meta.env.VITE_APP_FIREBASE_CONFIG)
+    : {};
 } catch (error: any) {
   console.warn(
     `Error JSON parsing firebase config. Supplied value: ${
