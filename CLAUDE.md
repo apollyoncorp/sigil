@@ -1,3 +1,18 @@
+# Sigil (Apollyon fork of Excalidraw)
+
+This repository is **Sigil**, a free, open-source drawing board by Apollyon (https://apollyoncorp.com). It is a fork of [Excalidraw](https://github.com/excalidraw/excalidraw) (MIT). The sections after this one are the upstream guide and still describe the code.
+
+- **Scope.** Apollyon hosts only the single-user editor at `sigil.apollyoncorp.com`. Collaboration, shareable links and the AI backend stay in the code, configurable by environment variables and **off by default**. Anyone self-hosting can turn them on. Excalidraw-only services (their Sentry DSN, Simple Analytics, Excalidraw+, banners, `*.excalidraw.com` hosts) are removed, not just disabled.
+- **AI.** Sigil pays for no model. AI support comes from the user's own assistant through `sigil-mcp` and the `sigil-diagrams` skill, which only draw and never call an LLM.
+- **Upstream.** `upstream` is `excalidraw/excalidraw` (push disabled), merged in periodically. Keep the brand in `excalidraw-app/` and keep the diff in `packages/` minimal so merges stay cheap. Sigil does not use Crowdin: locale files come from upstream merges, so change Sigil strings in `en.json` only through keys Sigil owns.
+- **Compatibility.** Sigil opens and saves `.excalidraw` files.
+- **Licenses.** `LICENSE` (MIT, both copyrights) and `NOTICE` (bundled fonts) must stay accurate. Check a font's license before adding or converting one.
+- **Toolchain.** Node 24 (same as the `Dockerfile`) and Yarn 1.22.
+- **Commits** in English, author `c-Morette`, no co-author trailers. Push, deploy and DNS changes need the owner's explicit approval. UI changes go through an A/B round and the owner's approval before commit.
+- **Memory and plan** live outside the repo (Apollyon's private notes), never in `.claude/` here.
+
+---
+
 # CLAUDE.md
 
 ## Project Structure

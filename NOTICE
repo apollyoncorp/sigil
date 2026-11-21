@@ -1,0 +1,111 @@
+Sigil
+Copyright (c) 2026 Apollyon Corporation
+
+Sigil is a fork of Excalidraw (https://github.com/excalidraw/excalidraw),
+Copyright (c) 2020 Excalidraw, released under the MIT License (see LICENSE).
+
+The code is MIT licensed. The fonts bundled with Sigil are not covered by the
+MIT License. Each one keeps its own license, listed below. The license texts
+are in the licenses/ folder.
+
+The font files are the same files the Excalidraw project ships. Sigil does not
+change them. Where a file is marked "modified", the Excalidraw project or the
+upstream distributor converted, split or subset it.
+
+-------------------------------------------------------------------------------
+Bundled fonts (packages/excalidraw/fonts/ and public/)
+-------------------------------------------------------------------------------
+
+Excalifont
+  Copyright (c) 2024 by Excalidraw. All rights reserved.
+  Designers: Your Own Font Foundry (Virgil); Jan Filipek / DizajnDesign
+  (Excalifont, modifications).
+  License: SIL Open Font License 1.1 (licenses/OFL-1.1.txt).
+  Reserved Font Name: none declared.
+  Trademark: "Excalifont is a trademark of Excalidraw."
+  Files: split into several woff2 files by the Excalidraw project.
+
+Virgil
+  Copyright (c) 2021 - Present, Ellinor Rapp, with Reserved Font Name Virgil.
+  Copyright (c) 2011 by Your Own Font Foundry. All rights reserved.
+  License: SIL Open Font License 1.1 (licenses/OFL-1.1.txt), as stated in
+  https://github.com/excalidraw/virgil/blob/main/LICENSE.md
+  Reserved Font Name: Virgil.
+  Files: converted by the Excalidraw project (packages/excalidraw/fonts/Virgil);
+  public/Virgil.woff2 is the upstream file, whose internal metadata still
+  carries an older freeware notice. The OFL statement above is the license
+  published by the font's repository.
+
+Cascadia Code
+  Copyright (c) 2019 - Present, Microsoft Corporation, with Reserved Font Name
+  Cascadia Code.
+  License: SIL Open Font License 1.1 (licenses/OFL-1.1.txt).
+  Reserved Font Name: Cascadia Code.
+  Files: packages/excalidraw/fonts/Cascadia is the unmodified release
+  v2005.15 (https://github.com/microsoft/cascadia-code).
+
+Lilita One
+  Copyright (c) 2011 Juan Montoreano (juan@remolacha.biz), with Reserved Font
+  Names "Lilita One".
+  License: SIL Open Font License 1.1 (licenses/OFL-1.1.txt).
+  Reserved Font Name: Lilita One (Google Fonts lists "Lilita").
+  Files: subset by Google Fonts.
+
+Nunito
+  Copyright 2014 The Nunito Project Authors
+  (https://github.com/googlefonts/nunito)
+  License: SIL Open Font License 1.1 (licenses/OFL-1.1.txt).
+  Reserved Font Name: none.
+  Files: instance and subset by Google Fonts.
+
+Assistant
+  Copyright 2020 The Assistant Project Authors
+  (https://github.com/hafontia/Assistant)
+  Copyright 2010 The Source Sans Pro Authors
+  (https://github.com/adobe-fonts/source-sans-pro), with Reserved Font Name
+  'Source'. Source is a trademark of Adobe Systems Incorporated in the United
+  States and/or other countries.
+  License: SIL Open Font License 1.1 (licenses/OFL-1.1.txt).
+  Reserved Font Name: Source.
+  Files: instances by Google Fonts.
+
+Xiaolai SC
+  Copyright 2020-2024 LXGW (https://github.com/lxgw/kose-font)
+  Copyright 2014 Nozomi Seto (https://ja.osdn.net/projects/setofont/)
+  License: SIL Open Font License 1.1 (licenses/OFL-1.1.txt).
+  Reserved Font Name: none.
+  Files: modified and split by the Excalidraw project.
+
+Comic Shanns
+  Copyright (c) 2018 Shannon Miwa
+  Copyright (c) 2023 Jesus Gonzalez
+  Copyright (c) 2023 Rodrigo Batista de Moraes
+  Copyright (c) 2024 Fini Jastrow
+  Copyright (c) 2024 Kyle Beechly
+  License: MIT (licenses/MIT-Comic-Shanns.txt).
+  Files: modified and split by the Excalidraw project.
+
+Liberation Sans (version 1.05)
+  Digitized data 2007 Ascender Corporation. All rights reserved.
+  Copyright (c) 2007-2011 Red Hat, Inc. All rights reserved.
+  LIBERATION is a trademark of Red Hat, Inc.
+  License: GNU General Public License v2 with the font exception
+  (licenses/Liberation-1.x-License.txt and licenses/GPL-2.0.txt).
+  Used only as a private fallback for exports; not listed in the font picker.
+
+Noto Emoji (scripts/woff2/assets, build input only)
+  Copyright 2013 Google LLC
+  License: SIL Open Font License 1.1 (licenses/OFL-1.1.txt).
+  Reserved Font Name: none.
+
+Helvetica and Segoe UI Emoji are not distributed. Sigil asks the browser for
+the fonts already installed on the user's system.
+
+-------------------------------------------------------------------------------
+Excalidraw
+-------------------------------------------------------------------------------
+
+Sigil keeps the .excalidraw file format so drawings stay compatible with
+Excalidraw and its ecosystem. "Excalidraw" is the name of the original project
+and is used here only to credit it. To support the original project, see
+https://opencollective.com/excalidraw
