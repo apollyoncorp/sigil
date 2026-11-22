@@ -2,7 +2,6 @@
   "name": "@apollyoncorp/sigil-mcp",
   "version": "0.1.0",
   "description": "MCP server that lets your own AI assistant draw diagrams for Sigil (.excalidraw files). It only draws: it never calls an LLM and never touches the network.",
-  "private": true,
   "license": "MIT",
   "type": "module",
   "keywords": [
@@ -13,6 +12,14 @@
     "diagram"
   ],
   "homepage": "https://sigil.apollyoncorp.com",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/apollyoncorp/sigil.git",
+    "directory": "sigil-mcp"
+  },
+  "bugs": {
+    "url": "https://github.com/apollyoncorp/sigil/issues"
+  },
   "bin": {
     "sigil-mcp": "dist/sigil-mcp.mjs"
   },
@@ -37,5 +44,8 @@
     "fontkit": "2.0.4",
     "linkedom": "0.18.12",
     "zod": "3.25.76"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }
