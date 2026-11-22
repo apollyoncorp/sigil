@@ -1,0 +1,13 @@
+{
+  "name": "apollyon",
+  "description": "Plugins by Apollyon Corporation.",
+  "owner": { "name": "Apollyon Corporation", "url": "https://apollyoncorp.com" },
+  "plugins": [
+    {
+      "name": "sigil",
+      "source": "./sigil-mcp",
+      "description": "Draw diagrams for Sigil from your assistant: sigil-mcp (local) plus the sigil-diagrams skill.",
+      "homepage": "https://sigil.apollyoncorp.com"
+    }
+  ]
+}
