@@ -25,7 +25,9 @@ Sigil has no account, no sign-in and no server for your drawings. They stay in y
 claude mcp add sigil -- npx -y @apollyoncorp/sigil-mcp
 ```
 
-Privacy: sigil-mcp only draws. It never calls an LLM and never makes a network request. It writes a `.excalidraw` file on your disk and builds a link that carries the diagram after the `#`, a part the browser never sends to a server. Setup for other clients and the tool list are in [`sigil-mcp/README.md`](sigil-mcp/README.md).
+Privacy: sigil-mcp only draws and never calls an LLM. Run locally, it never makes a network request: it writes a `.excalidraw` file on your disk and builds a link that carries the diagram after the `#`, a part the browser never sends to a server.
+
+No install: Apollyon also hosts it at `https://mcp.apollyoncorp.com/mcp` (`claude mcp add --transport http sigil https://mcp.apollyoncorp.com/mcp`). There the diagram passes through Apollyon's server, which does not store it or log its content, and usage is limited per IP. A Claude Code plugin bundles the local server with the `sigil-diagrams` skill: `/plugin marketplace add apollyoncorp/sigil`, then `/plugin install sigil@apollyon`. Setup for other clients and the tool list are in [`sigil-mcp/README.md`](sigil-mcp/README.md).
 
 ## Self-hosting
 
