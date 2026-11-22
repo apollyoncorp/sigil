@@ -1,0 +1,16 @@
+# Build context allow-list for sigil-mcp/Dockerfile.remote (BuildKit reads this
+# file instead of the repo-root .dockerignore, which is made for the app image).
+*
+!package.json
+!yarn.lock
+!tsconfig.json
+!.npmrc
+!packages/
+!excalidraw-app/
+!sigil-mcp/
+
+**/node_modules
+**/build
+**/dist
+sigil-mcp/test
+sigil-mcp/.claude-plugin

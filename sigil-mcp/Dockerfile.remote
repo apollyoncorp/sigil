@@ -1,0 +1,51 @@
+# sigil-mcp, remote mode: MCP over Streamable HTTP on 8080 (POST /mcp, GET /healthz).
+# Build context = the REPO ROOT, because the bundle imports from packages/ and
+# excalidraw-app/:
+#
+#   docker build -f sigil-mcp/Dockerfile.remote -t sigil-mcp-remote .
+#
+# Coolify: Dockerfile build pack, base directory "/", Dockerfile location
+# "/sigil-mcp/Dockerfile.remote", port 8080. Only the bundle ends up in the
+# final image: no node_modules, no sources. What gets into the build context
+# is listed in Dockerfile.remote.dockerignore.
+#
+# Optional environment (defaults in parentheses):
+#   SIGIL_MCP_RATE_PER_MINUTE (30)  SIGIL_MCP_RATE_PER_DAY (500)  per client IP
+#   SIGIL_MCP_RATE_GLOBAL_PER_MINUTE (600)  SIGIL_MCP_MAX_BODY_BYTES (1048576)
+#   SIGIL_MCP_REQUEST_TIMEOUT_MS (30000)  SIGIL_MCP_MAX_IN_FLIGHT (16)
+#   SIGIL_MCP_TRUST_CF_HEADER (1; 0 when not behind Cloudflare)
+#   SIGIL_URL (https://sigil.apollyoncorp.com; where open_url points)
+FROM node:24-bookworm AS build
+
+WORKDIR /opt/sigil
+
+COPY . .
+
+# repo root: esbuild and the packages the bundle imports (same install as the
+# Sigil app image); do not skip optional dependencies
+RUN --mount=type=cache,target=/root/.cache/yarn \
+    yarn --frozen-lockfile --network-timeout 600000
+# sigil-mcp: the MCP SDK, zod, linkedom
+RUN --mount=type=cache,target=/root/.cache/yarn \
+    cd sigil-mcp && yarn --frozen-lockfile --network-timeout 600000
+
+# bundle only (the font metrics it reads are committed in src/metrics)
+RUN cd sigil-mcp && node scripts/build.mjs
+
+FROM node:24-bookworm-slim
+
+ENV NODE_ENV=production \
+    SIGIL_MCP_HTTP=1 \
+    PORT=8080
+
+WORKDIR /app
+COPY --from=build --chown=node:node /opt/sigil/sigil-mcp/dist/sigil-mcp.mjs ./sigil-mcp.mjs
+
+USER node
+EXPOSE 8080
+
+# the slim image has no curl or wget: use node
+HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
+    CMD ["node", "-e", "fetch('http://127.0.0.1:8080/healthz').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))"]
+
+CMD ["node", "sigil-mcp.mjs"]

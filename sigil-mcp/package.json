@@ -1,6 +1,6 @@
 {
   "name": "@apollyoncorp/sigil-mcp",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "MCP server that lets your own AI assistant draw diagrams for Sigil (.excalidraw files). It only draws: it never calls an LLM and never touches the network.",
   "license": "MIT",
   "type": "module",
@@ -37,7 +37,9 @@
     "build": "node scripts/build-metrics.mjs && node scripts/build.mjs",
     "prepack": "node scripts/build.mjs",
     "test": "node ../node_modules/vitest/vitest.mjs run --config vitest.config.mts",
-    "e2e": "node scripts/e2e.mjs"
+    "e2e": "node scripts/e2e.mjs",
+    "e2e:http": "node scripts/e2e-http.mjs",
+    "start:http": "node dist/sigil-mcp.mjs --http"
   },
   "devDependencies": {
     "@modelcontextprotocol/sdk": "1.32.2",

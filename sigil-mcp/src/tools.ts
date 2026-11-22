@@ -62,6 +62,17 @@ export type ToolOutcome =
     }
   | { ok: false; errors: string[] };
 
+export type ToolOptions = {
+  /**
+   * Remote (HTTP) mode: nothing is ever written to disk, so `path` is refused
+   * and the reply carries the diagram instead.
+   */
+  remote?: boolean;
+};
+
+export const REMOTE_PATH_ERROR =
+  "path is not accepted by the remote server: it never writes files. Omit path; the reply carries the diagram JSON and open_url. To write a file on your own disk, run sigil-mcp locally (npx -y @apollyoncorp/sigil-mcp).";
+
 const resolveOutPath = (path: string): { path: string } | { error: string } => {
   if (!path.toLowerCase().endsWith(".excalidraw")) {
     return {
@@ -87,11 +98,17 @@ const quiet = <T>(fn: () => T): T => {
   }
 };
 
-export const createDiagram = async (input: {
-  elements: Entry[];
-  path?: string;
-}): Promise<ToolOutcome> => {
+export const createDiagram = async (
+  input: {
+    elements: Entry[];
+    path?: string;
+  },
+  options: ToolOptions = {},
+): Promise<ToolOutcome> => {
   const { elements } = input;
+  if (options.remote && input.path !== undefined) {
+    return { ok: false, errors: [REMOTE_PATH_ERROR] };
+  }
   if (elements.length === 0) {
     return { ok: false, errors: ["elements is empty; add at least one element."] };
   }
@@ -205,10 +222,16 @@ const nameFromElements = (elements: any[]) => {
   };
 };
 
-export const mermaidToDiagram = async (input: {
-  mermaid: string;
-  path?: string;
-}): Promise<ToolOutcome> => {
+export const mermaidToDiagram = async (
+  input: {
+    mermaid: string;
+    path?: string;
+  },
+  options: ToolOptions = {},
+): Promise<ToolOutcome> => {
+  if (options.remote && input.path !== undefined) {
+    return { ok: false, errors: [REMOTE_PATH_ERROR] };
+  }
   const errors: string[] = [];
   if (!input.mermaid.trim()) {
     errors.push("mermaid is empty.");
