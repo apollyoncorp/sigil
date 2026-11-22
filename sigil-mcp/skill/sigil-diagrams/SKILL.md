@@ -5,7 +5,7 @@ description: Draw clean diagrams (flowcharts, architecture, BPMN process maps wi
 
 # Drawing diagrams for Sigil
 
-Sigil opens `.excalidraw` files. You draw; the user's own assistant (you) does the thinking, nothing is sent to any service.
+Sigil opens `.excalidraw` files. You draw; the user's own assistant (you) does the thinking, and the local tools send nothing to any service.
 
 ## 1. Pick the route
 
@@ -14,7 +14,7 @@ Sigil opens `.excalidraw` files. You draw; the user's own assistant (you) does t
    - Anything where position matters, or any custom look: `create_diagram`.
 2. **No MCP?** Write the file yourself (section 5), then tell the user to open it in Sigil (File > Open, or drop it on the canvas).
 
-Always pass an absolute `path` ending in `.excalidraw` so the user gets a file, and give them `open_url` when the tool returns one.
+Pass an absolute `path` ending in `.excalidraw` so the user gets a file, and give them `open_url` when the tool returns one. The remote server (HTTP, `mcp.apollyoncorp.com`) refuses `path` because it writes nothing: leave it out, then give the user `open_url`, or save the returned JSON as a `.excalidraw` file for them.
 
 ## 2. Layout rules (these make it look good)
 
