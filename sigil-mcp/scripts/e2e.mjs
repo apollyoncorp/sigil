@@ -3,7 +3,7 @@
 // flowchart, and writes the files.
 //
 //   node scripts/e2e.mjs [outDir]
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -16,6 +16,13 @@ const outDir = resolve(process.argv[2] ?? join(tmpdir(), "sigil-mcp-e2e"));
 mkdirSync(outDir, { recursive: true });
 
 const client = new Client({ name: "sigil-e2e", version: "0.0.0" });
+// Proof that stdio mode never loads sqlite: a preload makes the server write
+// its loaded built-in modules to a file every 100 ms (Node lists
+// "NativeModule sqlite" only once node:sqlite has been loaded).
+const loadedFile = join(tmpdir(), `sigil-mcp-e2e-modules-${process.pid}.json`);
+const preload = `data:text/javascript,${encodeURIComponent(
+  `import{writeFileSync}from"node:fs";setInterval(()=>writeFileSync(${JSON.stringify(loadedFile)},JSON.stringify(process.moduleLoadList)),100).unref();`,
+)}`;
 // SIGIL_MCP_INSTALL_DIR=<dir> runs the server the way a user would: through
 // npx, from a directory where the packed tarball was installed (no repo, no
 // registry: --no-install).
@@ -27,7 +34,7 @@ await client.connect(
         args: ["--no-install", "@apollyoncorp/sigil-mcp"],
         cwd: installDir,
       })
-    : new StdioClientTransport({ command: process.execPath, args: [dist] }),
+    : new StdioClientTransport({ command: process.execPath, args: ["--import", preload, dist] }),
 );
 console.log("server:", installDir ? `npx in ${installDir}` : dist);
 
@@ -142,6 +149,15 @@ const unknown = await client
     () => true,
   );
 assert(unknown, "unknown shape should be rejected");
+
+if (!installDir) {
+  await new Promise((r) => setTimeout(r, 400));
+  const loaded = JSON.parse(readFileSync(loadedFile, "utf8"));
+  assert(loaded.some((m) => m === "NativeModule fs"), "preload did not run (control: fs is loaded)");
+  assert(!loaded.some((m) => /sqlite/i.test(m)), "stdio mode must not load sqlite");
+  console.log("stdio loads sqlite: no (checked in the server's module list)");
+  rmSync(loadedFile, { force: true });
+}
 
 await client.close();
 console.log("E2E OK ->", outDir);

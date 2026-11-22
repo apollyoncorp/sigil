@@ -5,15 +5,33 @@
 #   docker build -f sigil-mcp/Dockerfile.remote -t sigil-mcp-remote .
 #
 # Coolify: Dockerfile build pack, base directory "/", Dockerfile location
-# "/sigil-mcp/Dockerfile.remote", port 8080. Only the bundle ends up in the
-# final image: no node_modules, no sources. What gets into the build context
-# is listed in Dockerfile.remote.dockerignore.
+# "/sigil-mcp/Dockerfile.remote", port 8080.
+#
+# PERSISTENT VOLUME: the server keeps its rate-limit counters, the salt of the
+# IP hashes and the usage aggregates in a SQLite file in /data. In Coolify add a
+# Persistent Storage (volume) mounted at /data, or every redeploy starts with
+# empty counters and a new salt. Locally:
+#
+#   docker run -v sigil-mcp-data:/data -p 8080:8080 sigil-mcp-remote
+#
+# Use a named volume (it takes the owner of /data, node). A bind mount of a
+# host folder must be writable by uid 1000 (node), or the server answers 503.
+# Needs Node 24 (node:sqlite is built in; this image is Node 24). If the file
+# cannot be written the server answers 503 (it never serves without a limit).
+#
+# Only the bundle ends up in the final image: no node_modules, no sources.
+# What gets into the build context is listed in Dockerfile.remote.dockerignore.
 #
 # Optional environment (defaults in parentheses):
 #   SIGIL_MCP_RATE_PER_MINUTE (30)  SIGIL_MCP_RATE_PER_DAY (500)  per client IP
 #   SIGIL_MCP_RATE_GLOBAL_PER_MINUTE (600)  SIGIL_MCP_MAX_BODY_BYTES (1048576)
 #   SIGIL_MCP_REQUEST_TIMEOUT_MS (30000)  SIGIL_MCP_MAX_IN_FLIGHT (16)
-#   SIGIL_MCP_TRUST_CF_HEADER (1; 0 when not behind Cloudflare)
+#   SIGIL_MCP_TRUST_CF_HEADER (1; /mcp without a valid CF-Connecting-IP is a 403;
+#                              0 when not behind Cloudflare: socket address)
+#   SIGIL_MCP_ORIGIN_SECRET (unset; when set, /mcp and /stats need the header
+#                            X-Sigil-Origin-Auth: <secret>, 403 otherwise)
+#   SIGIL_MCP_DATA_DIR (/data here)
+#   SIGIL_MCP_STATS_TOKEN (unset: GET /stats is a 404; 16+ characters to enable)
 #   SIGIL_URL (https://sigil.apollyoncorp.com; where open_url points)
 FROM node:24-bookworm AS build
 
@@ -36,10 +54,16 @@ FROM node:24-bookworm-slim
 
 ENV NODE_ENV=production \
     SIGIL_MCP_HTTP=1 \
+    SIGIL_MCP_DATA_DIR=/data \
     PORT=8080
 
 WORKDIR /app
 COPY --from=build --chown=node:node /opt/sigil/sigil-mcp/dist/sigil-mcp.mjs ./sigil-mcp.mjs
+
+# the folder is created with its owner before the volume is declared, so a
+# new named volume inherits node:node and the non-root user can write to it
+RUN mkdir /data && chown node:node /data
+VOLUME /data
 
 USER node
 EXPOSE 8080

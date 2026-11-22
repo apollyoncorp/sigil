@@ -27,6 +27,9 @@ execFileSync(
     '--define:import.meta.env={"MODE":"production","DEV":false,"PROD":true}',
     "--define:process.env.NODE_ENV=\"production\"",
     "--banner:js=#!/usr/bin/env node\nglobalThis.window ??= globalThis;\nimport {createRequire as __sigilCreateRequire} from \"node:module\";const require=__sigilCreateRequire(import.meta.url);",
+    // remote mode only: loaded at runtime with createRequire (src/store.ts),
+    // never bundled and never opened in stdio mode
+    "--external:node:sqlite",
     "--legal-comments=none",
     "--log-level=warning",
     `--outfile=${out}`,

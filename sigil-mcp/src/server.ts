@@ -8,6 +8,8 @@ import { createDiagram, formatOutcome, mermaidToDiagram } from "./tools";
 
 export const SERVER_NAME = "sigil-mcp";
 export const SERVER_VERSION = "0.3.0";
+/** The tools this server registers (usage is counted per name). */
+export const TOOL_NAMES = ["create_diagram", "mermaid_to_diagram", "describe_format"] as const;
 
 const LOCAL_CREATE_EXAMPLE = `Example: {"elements":[{"type":"rectangle","id":"a","x":0,"y":0,"label":{"text":"Client"}},{"type":"rectangle","id":"b","x":300,"y":0,"label":{"text":"API"}},{"type":"arrow","start":{"id":"a"},"end":{"id":"b"},"label":{"text":"HTTPS"}}],"path":"/tmp/api.excalidraw"}`;
 const REMOTE_CREATE_EXAMPLE = LOCAL_CREATE_EXAMPLE.replace(',"path":"/tmp/api.excalidraw"', "");

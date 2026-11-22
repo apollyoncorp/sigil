@@ -4,9 +4,14 @@
 //
 //   sigil-mcp --http            (or SIGIL_MCP_HTTP=1; PORT, default 8080)
 //
-// Nothing is ever written to disk, and the diagram content is never logged:
-// a log line is method, path, status, duration and a salted hash of the IP.
-import { createHmac, randomBytes } from "node:crypto";
+// Persistence: rate-limit counters, the IP-hash salt and per-day usage
+// aggregates live in one SQLite file in SIGIL_MCP_DATA_DIR (see store.ts), so
+// a restart or redeploy does not reset the limits. Diagrams are never written
+// to disk, and their content is never logged or stored: a log line is method,
+// path, status, duration and a salted hash of the IP.
+import { createHash, timingSafeEqual } from "node:crypto";
+import { homedir } from "node:os";
+import { join } from "node:path";
 import {
   createServer as createHttpServer,
   type IncomingMessage,
@@ -17,8 +22,8 @@ import { isIP } from "node:net";
 
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 
-import { RateLimiter } from "./ratelimit";
-import { createServer, SERVER_VERSION } from "./server";
+import { createServer, SERVER_VERSION, TOOL_NAMES } from "./server";
+import { Store, type Outcome, type UsageTool } from "./store";
 
 export type HttpConfig = {
   port: number;
@@ -31,7 +36,17 @@ export type HttpConfig = {
   maxInFlight: number;
   /** read the client IP from CF-Connecting-IP (turn off when not behind Cloudflare) */
   trustCfHeader: boolean;
+  /** folder of the SQLite file (counters, salt, usage); needs a persistent volume */
+  dataDir: string;
+  /** Bearer token for GET /stats; without one the route is a 404 */
+  statsToken?: string;
+  /** when set, /mcp and /stats need `X-Sigil-Origin-Auth: <this>` (Cloudflare adds it) */
+  originSecret?: string;
 };
+
+export const ORIGIN_HEADER = "x-sigil-origin-auth";
+
+export const MIN_STATS_TOKEN_LENGTH = 16;
 
 const intEnv = (
   env: NodeJS.ProcessEnv,
@@ -51,6 +66,30 @@ const intEnv = (
   return n;
 };
 
+const statsToken = (env: NodeJS.ProcessEnv) => {
+  const token = env.SIGIL_MCP_STATS_TOKEN?.trim();
+  if (!token) {
+    return undefined;
+  }
+  if (token.length < MIN_STATS_TOKEN_LENGTH) {
+    console.error(
+      `SIGIL_MCP_STATS_TOKEN is shorter than ${MIN_STATS_TOKEN_LENGTH} characters; /stats stays off`,
+    );
+    return undefined;
+  }
+  return token;
+};
+
+const originSecret = (env: NodeJS.ProcessEnv) => {
+  const secret = env.SIGIL_MCP_ORIGIN_SECRET?.trim();
+  if (secret && secret.length < MIN_STATS_TOKEN_LENGTH) {
+    console.error(
+      `SIGIL_MCP_ORIGIN_SECRET is shorter than ${MIN_STATS_TOKEN_LENGTH} characters: easy to guess`,
+    );
+  }
+  return secret || undefined;
+};
+
 export const loadHttpConfig = (
   env: NodeJS.ProcessEnv = process.env,
 ): HttpConfig => ({
@@ -63,6 +102,9 @@ export const loadHttpConfig = (
   requestTimeoutMs: intEnv(env, "SIGIL_MCP_REQUEST_TIMEOUT_MS", 30_000),
   maxInFlight: intEnv(env, "SIGIL_MCP_MAX_IN_FLIGHT", 16),
   trustCfHeader: !/^(0|false|no)$/i.test(env.SIGIL_MCP_TRUST_CF_HEADER ?? ""),
+  dataDir: env.SIGIL_MCP_DATA_DIR?.trim() || join(homedir(), ".sigil-mcp"),
+  statsToken: statsToken(env),
+  originSecret: originSecret(env),
 });
 
 // --- client address -------------------------------------------------------
@@ -96,16 +138,27 @@ export const normalizeIp = (raw: string) => {
 };
 
 /**
- * CF-Connecting-IP when it is there and is a single valid address, else the
- * socket address. X-Forwarded-For is never read: without Cloudflare in front,
- * anyone can write anything in it.
+ * The client address a request is limited by.
+ *
+ * With `trustCfHeader` (the default, for a server behind Cloudflare) it is
+ * CF-Connecting-IP when that is a single valid address, and `undefined`
+ * otherwise: the caller refuses the request. It never falls back to the socket
+ * address, because behind a proxy that is the proxy's address (one bucket for
+ * everyone), and a request that reached the server without passing Cloudflare
+ * (from the LAN, say) could be anyone. With `trustCfHeader` off (a server not
+ * behind Cloudflare) it is the socket address and the header is ignored.
+ * X-Forwarded-For is never read: anyone can write anything in it, and Traefik
+ * rewrites it.
  */
 export const clientKey = (req: IncomingMessage, trustCfHeader = true) => {
-  const cf = trustCfHeader ? req.headers["cf-connecting-ip"] : undefined;
+  if (!trustCfHeader) {
+    return normalizeIp(req.socket.remoteAddress ?? "unknown");
+  }
+  const cf = req.headers["cf-connecting-ip"];
   if (typeof cf === "string" && isIP(cf.trim())) {
     return normalizeIp(cf);
   }
-  return normalizeIp(req.socket.remoteAddress ?? "unknown");
+  return undefined;
 };
 
 // --- responses ------------------------------------------------------------
@@ -173,16 +226,58 @@ const readJsonBody = (req: IncomingMessage, maxBytes: number) =>
 
 export type RemoteServer = {
   server: Server;
-  limiter: RateLimiter;
+  store: Store;
   close: () => Promise<void>;
 };
+
+/** The tool a JSON-RPC body calls; anything else is counted as "other". */
+export const toolOf = (json: unknown): UsageTool => {
+  for (const m of Array.isArray(json) ? json : [json]) {
+    const msg = m as { method?: unknown; params?: { name?: unknown } } | null;
+    if (msg?.method === "tools/call") {
+      const name = msg.params?.name;
+      const known = (TOOL_NAMES as readonly unknown[]).includes(name);
+      return known ? (name as UsageTool) : "other";
+    }
+  }
+  return "other";
+};
+
+/** True when a JSON-RPC reply (one message or a batch) carries an error. */
+const replyFailed = (text: string) => {
+  try {
+    const msgs = JSON.parse(text);
+    return (Array.isArray(msgs) ? msgs : [msgs]).some(
+      (m) => m?.error !== undefined || m?.result?.isError === true,
+    );
+  } catch {
+    return false;
+  }
+};
+
+/** Replies larger than this are not inspected for errors (counted as ok). */
+const MAX_REPLY_BYTES = 8 * 1024 * 1024;
+
+const digest = (s: string) => createHash("sha256").update(s).digest();
+
+/** Constant-time check of an `Authorization: Bearer <token>` header. */
+export const bearerMatches = (header: string | undefined, token: string) => {
+  const m = /^Bearer (.+)$/.exec(header ?? "");
+  // both sides are hashed first: same length, so no early exit on length
+  return timingSafeEqual(digest(m?.[1] ?? ""), digest(token)) && m !== null;
+};
+
+/** Constant-time check of the `X-Sigil-Origin-Auth` header against the secret. */
+export const originMatches = (header: string | string[] | undefined, secret: string) =>
+  typeof header === "string" && timingSafeEqual(digest(header), digest(secret));
 
 export const createRemoteServer = (
   config: HttpConfig = loadHttpConfig(),
   log: (line: string) => void = (line) => console.error(line),
   clock: () => number = Date.now,
 ): RemoteServer => {
-  const limiter = new RateLimiter(
+  const store = new Store(
+    config.dataDir,
     {
       perMinute: config.perMinute,
       perDay: config.perDay,
@@ -190,12 +285,20 @@ export const createRemoteServer = (
     },
     clock,
   );
-  limiter.start();
-  // a salt that exists only in this process: the hash in the log cannot be
-  // turned back into an address, nor matched across restarts
-  const salt = randomBytes(16);
-  const hashIp = (key: string) =>
-    createHmac("sha256", salt).update(key).digest("hex").slice(0, 10);
+  store.start();
+  // the salt lives in the database: the same address hashes the same way
+  // after a restart, and the hash cannot be turned back into an address
+  const hashIp = (key: string) => store.hash(key);
+  const logStoreError = (e: unknown) =>
+    // name and sqlite error code only: a message could quote a path or a query
+    log(
+      JSON.stringify({
+        event: "store_error",
+        name: (e as Error)?.name ?? "Error",
+        code: (e as { code?: string })?.code,
+        errcode: (e as { errcode?: number })?.errcode,
+      }),
+    );
   let inFlight = 0;
 
   const handleMcp = async (req: IncomingMessage, res: ServerResponse) => {
@@ -211,23 +314,16 @@ export const createRemoteServer = (
       send(res, 503, rpcError(-32000, "Server busy. Try again shortly."), { "Retry-After": 1 });
       return;
     }
-    const verdict = limiter.take(clientKey(req, config.trustCfHeader));
-    if (!verdict.allowed) {
-      send(
-        res,
-        429,
-        rpcError(
-          -32000,
-          verdict.scope === "global"
-            ? "The shared server is at capacity. Try again shortly, or run sigil-mcp locally (npx -y @apollyoncorp/sigil-mcp)."
-            : `Rate limit reached (${verdict.scope}). Try again in ${verdict.retryAfterSec}s, or run sigil-mcp locally (npx -y @apollyoncorp/sigil-mcp).`,
-        ),
-        { "Retry-After": verdict.retryAfterSec },
-      );
+
+    // Forbidden, with no detail: the answer must not tell a forger which
+    // check it failed
+    if (config.originSecret && !originMatches(req.headers[ORIGIN_HEADER], config.originSecret)) {
+      send(res, 403, rpcError(-32000, "Forbidden."));
       return;
     }
-    if (!/^application\/json\b/i.test(req.headers["content-type"] ?? "")) {
-      send(res, 415, rpcError(-32000, "Content-Type must be application/json."));
+    const key = clientKey(req, config.trustCfHeader);
+    if (key === undefined) {
+      send(res, 403, rpcError(-32000, "Forbidden."));
       return;
     }
 
@@ -239,6 +335,11 @@ export const createRemoteServer = (
         inFlight--;
       }
     };
+    let tool: UsageTool = "other";
+    let limited = false;
+    let counted = false;
+    const replyChunks: Buffer[] = [];
+    let replyBytes = 0;
     const timer = setTimeout(() => {
       send(res, 504, rpcError(-32000, "Request timed out."), { Connection: "close" });
       res.socket?.destroySoon();
@@ -253,20 +354,114 @@ export const createRemoteServer = (
       release();
       void transport.close().catch(() => {});
       void mcpServer.close().catch(() => {});
+      if (counted) {
+        const outcome: Outcome = limited
+          ? "limited"
+          : res.statusCode >= 400 || (replyChunks.length > 0 && replyFailed(Buffer.concat(replyChunks).toString("utf8")))
+            ? "error"
+            : "ok";
+        try {
+          store.record(tool, outcome);
+        } catch (e) {
+          logStoreError(e);
+        }
+      }
     });
 
     try {
+      // The body is read before the limit check so a 429 can be attributed to
+      // the tool that was called. It is bounded (size, time, in-flight cap).
       const body = await readJsonBody(req, config.maxBodyBytes);
+      if (body.ok) {
+        tool = toolOf(body.json);
+      }
+
+      // Failing closed: if the counters cannot be read or written, the request
+      // is refused. Letting it through would mean serving without a limit.
+      let verdict;
+      try {
+        verdict = store.take(hashIp(key));
+      } catch (e) {
+        logStoreError(e);
+        send(res, 503, rpcError(-32000, "Service temporarily unavailable. Try again shortly."), { "Retry-After": 5 });
+        return;
+      }
+      counted = true;
+      if (!verdict.allowed) {
+        limited = true;
+        send(
+          res,
+          429,
+          rpcError(
+            -32000,
+            verdict.scope === "global"
+              ? "The shared server is at capacity. Try again shortly, or run sigil-mcp locally (npx -y @apollyoncorp/sigil-mcp)."
+              : `Rate limit reached (${verdict.scope}). Try again in ${verdict.retryAfterSec}s, or run sigil-mcp locally (npx -y @apollyoncorp/sigil-mcp).`,
+          ),
+          { "Retry-After": verdict.retryAfterSec },
+        );
+        return;
+      }
+      if (!/^application\/json\b/i.test(req.headers["content-type"] ?? "")) {
+        send(res, 415, rpcError(-32000, "Content-Type must be application/json."));
+        return;
+      }
       if (!body.ok) {
         send(res, body.status, rpcError(body.status === 400 ? -32700 : -32000, body.message), { Connection: "close" });
         return;
       }
+
+      // keep what the transport writes (up to MAX_REPLY_BYTES) to see
+      // afterwards whether the tool call failed
+      const keep = (chunk: unknown) => {
+        const buf =
+          typeof chunk === "string"
+            ? Buffer.from(chunk)
+            : chunk instanceof Uint8Array
+              ? Buffer.from(chunk.buffer, chunk.byteOffset, chunk.byteLength)
+              : undefined;
+        if (buf && replyBytes + buf.length <= MAX_REPLY_BYTES) {
+          replyChunks.push(buf);
+          replyBytes += buf.length;
+        }
+      };
+      const write = res.write.bind(res) as (...args: unknown[]) => boolean;
+      const end = res.end.bind(res) as (...args: unknown[]) => ServerResponse;
+      (res as { write: unknown }).write = (chunk?: unknown, ...rest: unknown[]) => {
+        keep(chunk);
+        return write(chunk, ...rest);
+      };
+      (res as { end: unknown }).end = (chunk?: unknown, ...rest: unknown[]) => {
+        keep(chunk);
+        return end(chunk, ...rest);
+      };
       await mcpServer.connect(transport);
       await transport.handleRequest(req, res, body.json);
     } catch (e) {
       // only the error class: a message could quote the request
       log(JSON.stringify({ event: "error", name: (e as Error)?.name ?? "Error" }));
       send(res, 500, rpcError(-32603, "Internal error."));
+    }
+  };
+
+  const handleStats = (req: IncomingMessage, res: ServerResponse) => {
+    if (req.method !== "GET") {
+      send(res, 405, "Method not allowed", { Allow: "GET" });
+      return;
+    }
+    if (config.originSecret && !originMatches(req.headers[ORIGIN_HEADER], config.originSecret)) {
+      send(res, 403, "Forbidden");
+      return;
+    }
+    if (!config.statsToken || !bearerMatches(req.headers.authorization, config.statsToken)) {
+      send(res, 401, "Unauthorized", { "WWW-Authenticate": "Bearer" });
+      return;
+    }
+    try {
+      send(res, 200, JSON.stringify(store.stats(30)));
+    } catch (e) {
+      logStoreError(e);
+      send(res, 503, "Service temporarily unavailable");
     }
   };
 
@@ -277,7 +472,10 @@ export const createRemoteServer = (
     let path = "other";
     try {
       const p = new URL(req.url ?? "/", "http://sigil").pathname;
-      path = p === "/mcp" || p === "/healthz" ? p : "other";
+      // /stats exists only when a token is configured: otherwise it is a 404
+      // like any unknown route
+      path =
+        p === "/mcp" || p === "/healthz" || (p === "/stats" && config.statsToken) ? p : "other";
     } catch {
       // malformed target: counts as "other"
     }
@@ -291,7 +489,12 @@ export const createRemoteServer = (
             path,
             status: res.statusCode,
             ms: clock() - started,
-            ip: hashIp(clientKey(req, config.trustCfHeader)),
+            // no valid CF-Connecting-IP (a refused request): hash the socket
+            // address, in its own domain, to see who keeps trying
+            ip: store.hash(
+              clientKey(req, config.trustCfHeader) ?? `socket:${req.socket.remoteAddress ?? ""}`,
+              10,
+            ),
           }),
         );
       }
@@ -299,12 +502,20 @@ export const createRemoteServer = (
 
     if (path === "/healthz") {
       if (req.method === "GET" || req.method === "HEAD") {
-        send(res, 200, JSON.stringify({ status: "ok", version: SERVER_VERSION }));
+        let storeState = "ok";
+        try {
+          store.ping();
+        } catch {
+          storeState = "error";
+        }
+        send(res, 200, JSON.stringify({ status: "ok", version: SERVER_VERSION, store: storeState }));
       } else {
         send(res, 405, "Method not allowed", { Allow: "GET, HEAD" });
       }
     } else if (path === "/mcp") {
       void handleMcp(req, res);
+    } else if (path === "/stats") {
+      handleStats(req, res);
     } else {
       send(res, 404, "Not found");
     }
@@ -317,11 +528,13 @@ export const createRemoteServer = (
 
   return {
     server,
-    limiter,
+    store,
     close: () =>
       new Promise<void>((resolve) => {
-        limiter.stop();
-        server.close(() => resolve());
+        server.close(() => {
+          store.close();
+          resolve();
+        });
         server.closeIdleConnections?.();
       }),
   };
@@ -333,7 +546,9 @@ export const startHttp = async (config: HttpConfig = loadHttpConfig()) => {
     remote.server.once("error", reject);
     remote.server.listen(config.port, config.host, resolve);
   });
-  console.error(`sigil-mcp ready (http) on ${config.host}:${config.port}, POST /mcp`);
+  console.error(
+    `sigil-mcp ready (http) on ${config.host}:${config.port}, POST /mcp; data in ${config.dataDir}${config.statsToken ? "; GET /stats on" : ""}`,
+  );
   const stop = () => {
     // let in-flight requests finish, but not forever
     setTimeout(() => process.exit(0), 5_000).unref();
