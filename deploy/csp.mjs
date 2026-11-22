@@ -11,14 +11,16 @@ const inline = [
 
 const csp = [
   "default-src 'self'",
-  // wasm: font subsetting on export
-  `script-src 'self' 'wasm-unsafe-eval' ${inline.join(" ")}`,
+  // wasm: font subsetting on export; static.cloudflareinsights.com: the
+  // cookieless Cloudflare Web Analytics beacon the edge injects
+  `script-src 'self' 'wasm-unsafe-eval' https://static.cloudflareinsights.com ${inline.join(" ")}`,
   // React and the editor set inline styles
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: blob: https:",
   "font-src 'self' data:",
-  // libraries.excalidraw.com: libraries added from the public catalog
-  "connect-src 'self' data: blob: https://libraries.excalidraw.com",
+  // libraries.excalidraw.com: libraries added from the public catalog;
+  // cloudflareinsights.com: where the analytics beacon may report
+  "connect-src 'self' data: blob: https://libraries.excalidraw.com https://cloudflareinsights.com",
   // embeds the user pastes on the canvas (YouTube, Figma, ...)
   "frame-src https:",
   "worker-src 'self' blob:",
