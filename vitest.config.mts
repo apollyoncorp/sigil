@@ -1,6 +1,6 @@
 import path from "path";
 
-import { defineConfig } from "vitest/config";
+import { configDefaults, defineConfig } from "vitest/config";
 
 export default defineConfig({
   resolve: {
@@ -80,6 +80,9 @@ export default defineConfig({
       hooks: "parallel",
     },
     setupFiles: ["./setupTests.ts"],
+    // sigil-mcp is a standalone package with its own dependencies and vitest
+    // config; its tests run in sigil-mcp-publish.yml, not from the repo root.
+    exclude: [...configDefaults.exclude, "sigil-mcp/**"],
     globals: true,
     environment: "jsdom",
     // don't list skipped tests in the failure tree — keeps output readable
