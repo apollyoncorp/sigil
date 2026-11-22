@@ -1,6 +1,6 @@
 export const FORMAT_SHEET = `# Sigil diagram format (create_diagram)
 
-Call create_diagram with { elements: [...], path?: "/abs/dir/name.excalidraw" }.
+Call create_diagram with { elements: [...], path?: "/abs/dir/name.sigil" }.
 Coordinates are px; x grows right, y grows down. Origin is arbitrary.
 
 ## Element fields
@@ -28,7 +28,7 @@ fontFamily  Excalifont (default) | Nunito | "Lilita One" | Cascadia
   { "type": "rectangle", "id": "done",  "x": 0,   "y": 340, "label": { "text": "Done" }, "backgroundColor": "#b2f2bb" },
   { "type": "arrow", "start": { "id": "start" }, "end": { "id": "ok" } },
   { "type": "arrow", "start": { "id": "ok" }, "end": { "id": "done" }, "label": { "text": "yes" } }
-], "path": "/abs/path/flow.excalidraw" }
+], "path": "/abs/path/flow.sigil" }
 
 ## BPMN and flowchart shapes
 Entries of the same list, next to plain elements. Size is fixed; x, y is the top-left corner.
@@ -65,7 +65,7 @@ Extra warnings: message_flow_same_pool, sequence_flow_crosses_pools, element_out
   { "flow": "sequence", "from": "s", "to": "order" },
   { "flow": "message", "from": "order", "to": "ship", "label": "order" },
   { "flow": "sequence", "from": "ship", "to": "e" }
-], "path": "/abs/path/shop.excalidraw" }
+], "path": "/abs/path/shop.sigil" }
 
 ## Layout tips
 - Default box 180x80 (diamond 180x100). Omit width/height and the box fits its label.

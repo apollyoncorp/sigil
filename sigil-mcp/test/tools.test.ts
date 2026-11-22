@@ -65,9 +65,9 @@ describe("conversion", () => {
     expect(label.y + label.height).toBeLessThanOrEqual(a.y + a.height);
   });
 
-  it("writes a valid .excalidraw file", async () => {
+  it("writes a valid .sigil file (same JSON as .excalidraw)", async () => {
     const dir = await mkdtemp(join(tmpdir(), "sigil-mcp-"));
-    const path = join(dir, "nested", "d.excalidraw");
+    const path = join(dir, "nested", "d.sigil");
     const out = await createDiagram({ elements: flow, path });
     expect(out.ok).toBe(true);
     const file = JSON.parse(await readFile(path, "utf8"));
@@ -79,6 +79,18 @@ describe("conversion", () => {
       files: {},
     });
     expect(file.elements.length).toBe(6);
+  });
+
+  it("still writes .excalidraw files, with the same content", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "sigil-mcp-"));
+    const sigil = join(dir, "d.sigil");
+    const legacy = join(dir, "d.EXCALIDRAW");
+    expect((await createDiagram({ elements: flow, path: sigil })).ok).toBe(true);
+    expect((await createDiagram({ elements: flow, path: legacy })).ok).toBe(true);
+    const a = JSON.parse(await readFile(sigil, "utf8"));
+    const b = JSON.parse(await readFile(legacy, "utf8"));
+    expect(b.type).toBe("excalidraw");
+    expect(b.elements.length).toBe(a.elements.length);
   });
 
   it("returns the JSON when no path is given", async () => {
@@ -169,11 +181,11 @@ describe("validation", () => {
     ]);
   });
 
-  it("only writes .excalidraw files", async () => {
+  it("only writes .sigil or .excalidraw files", async () => {
     const out = await createDiagram({ elements: flow, path: "/tmp/not-sigil.sh" });
     expect(out.ok).toBe(false);
     if (!out.ok) {
-      expect(out.errors[0]).toMatch(/must end in \.excalidraw/);
+      expect(out.errors[0]).toMatch(/must end in \.sigil \(or \.excalidraw\)/);
     }
   });
 

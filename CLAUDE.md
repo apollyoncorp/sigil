@@ -5,7 +5,7 @@ This repository is **Sigil**, a free, open-source drawing board by Apollyon (htt
 - **Scope.** Apollyon hosts only the single-user editor at `sigil.apollyoncorp.com`. Collaboration, shareable links and the AI backend stay in the code, configurable by environment variables and **off by default**. Anyone self-hosting can turn them on. Excalidraw-only services (their Sentry DSN, Simple Analytics, Excalidraw+, banners, `*.excalidraw.com` hosts) are removed, not just disabled.
 - **AI.** Sigil pays for no model. AI support comes from the user's own assistant through `sigil-mcp` and the `sigil-diagrams` skill, which only draw and never call an LLM.
 - **Upstream.** `upstream` is `excalidraw/excalidraw` (push disabled), merged in periodically. Keep the brand in `excalidraw-app/` and keep the diff in `packages/` minimal so merges stay cheap. Sigil does not use Crowdin: locale files come from upstream merges, so change Sigil strings in `en.json` only through keys Sigil owns.
-- **Compatibility.** Sigil opens and saves `.excalidraw` files.
+- **Compatibility.** Sigil saves `.sigil` files by default (same JSON as `.excalidraw`, so renaming works both ways), opens `.sigil` and `.excalidraw`, and offers "Save as .excalidraw" in the export dialog. The extension lives in `SIGIL_FILE_EXTENSION` (`packages/common/src/constants.ts`).
 - **Licenses.** `LICENSE` (MIT, both copyrights) and `NOTICE` (bundled fonts) must stay accurate. Check a font's license before adding or converting one.
 - **Toolchain.** Node 24 (same as the `Dockerfile`) and Yarn 1.22.
 - **Commits** in English, author `c-Morette`, no co-author trailers. Push, deploy and DNS changes need the owner's explicit approval. UI changes go through an A/B round and the owner's approval before commit.

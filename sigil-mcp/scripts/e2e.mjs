@@ -66,7 +66,7 @@ const flow = {
     { type: "arrow", start: { id: "valid" }, end: { id: "run" }, label: { text: "yes" } },
     { type: "arrow", start: { id: "valid" }, end: { id: "fail" }, label: { text: "no" } },
   ],
-  path: join(outDir, "flow.excalidraw"),
+  path: join(outDir, "flow.sigil"),
 };
 const res = await client.callTool({ name: "create_diagram", arguments: flow });
 console.log(res.content[0].text);
@@ -81,7 +81,7 @@ writeFileSync(join(outDir, "flow.url.txt"), summary.open_url + "\n");
 const file = JSON.parse(readFileSync(flow.path, "utf8"));
 assert(file.type === "excalidraw" && file.version === 2, "file header");
 assert(file.source === "https://sigil.apollyoncorp.com", "file source");
-console.log("flow.excalidraw elements:", file.elements.length);
+console.log("flow.sigil elements:", file.elements.length);
 
 // an invalid call must give an actionable error, not a crash
 const bad = await client.callTool({
@@ -100,7 +100,7 @@ const mm = await client.callTool({
   name: "mermaid_to_diagram",
   arguments: {
     mermaid: "flowchart TD\n  A[Start] --> B[Load configuration]\n  B --> C{Config valid?}\n  C -->|yes| D[Run the job]\n  C -->|no| E[Report error]",
-    path: join(outDir, "mermaid.excalidraw"),
+    path: join(outDir, "mermaid.sigil"),
   },
 });
 console.log(mm.content[0].text);
@@ -113,7 +113,7 @@ const bpmnJson = [...skill.matchAll(/```json\n(\{"elements".*?)\n```/gs)]
   .find((s) => s.includes('"bpmn.pool"'));
 assert(bpmnJson, "skill has no BPMN example");
 const bpmn = JSON.parse(bpmnJson);
-bpmn.path = join(outDir, "support.excalidraw");
+bpmn.path = join(outDir, "support.sigil");
 const bp = await client.callTool({ name: "create_diagram", arguments: bpmn });
 assert(!bp.isError, `BPMN example rejected: ${bp.content[0].text}`);
 const bpSummary = JSON.parse(bp.content[0].text);
@@ -127,7 +127,7 @@ const wrong = JSON.parse(bpmnJson);
 wrong.elements = wrong.elements.map((e) =>
   e.flow === "message" && e.from === "submit" ? { ...e, to: "answer" } : e,
 );
-wrong.path = join(outDir, "support-wrong.excalidraw");
+wrong.path = join(outDir, "support-wrong.sigil");
 const wr = await client.callTool({ name: "create_diagram", arguments: wrong });
 const wrSummary = JSON.parse(wr.content[0].text);
 console.log("wrong BPMN ->", wrSummary.warnings);

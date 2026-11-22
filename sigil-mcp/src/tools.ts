@@ -74,9 +74,10 @@ export const REMOTE_PATH_ERROR =
   "path is not accepted by the remote server: it never writes files. Omit path; the reply carries the diagram JSON and open_url. To write a file on your own disk, run sigil-mcp locally (npx -y @apollyoncorp/sigil-mcp).";
 
 const resolveOutPath = (path: string): { path: string } | { error: string } => {
-  if (!path.toLowerCase().endsWith(".excalidraw")) {
+  const lower = path.toLowerCase();
+  if (!lower.endsWith(".sigil") && !lower.endsWith(".excalidraw")) {
     return {
-      error: `path '${path}' must end in .excalidraw (Sigil opens that extension).`,
+      error: `path '${path}' must end in .sigil (or .excalidraw). Sigil opens both; .sigil is the one it saves by default.`,
     };
   }
   return { path: resolve(path) };
@@ -302,7 +303,7 @@ export const formatOutcome = (o: ToolOutcome) => {
   }
   const where = o.path
     ? "Open the written file in Sigil"
-    : "Save the JSON below as name.excalidraw and open it in Sigil";
+    : "Save the JSON below as name.sigil and open it in Sigil";
   const link = o.openUrl
     ? "or give the user open_url (a link that opens the diagram directly)."
     : `open_url was left out because the link would be ${o.openUrlLength} characters; open the file instead.`;

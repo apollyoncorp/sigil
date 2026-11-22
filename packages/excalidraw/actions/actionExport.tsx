@@ -325,6 +325,10 @@ export const actionSaveToActiveFile = register({
     event.key === KEYS.S && event[KEYS.CTRL_OR_CMD] && !event.shiftKey,
 });
 
+/**
+ * Saves a `.sigil` file. Perform with the value `"excalidraw"` to save a
+ * `.excalidraw` copy instead (for opening the scene in Excalidraw).
+ */
 export const actionSaveFileToDisk = register({
   name: "saveFileToDisk",
   label: "exportDialog.disk_title",
@@ -345,6 +349,7 @@ export const actionSaveFileToDisk = register({
         data: exportedDataPromise,
         filename: app.getName(),
         fileHandle: null,
+        ...(value === "excalidraw" && { extension: "excalidraw" }),
       });
 
       return {

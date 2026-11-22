@@ -1,11 +1,11 @@
 ---
 name: sigil-diagrams
-description: Draw clean diagrams (flowcharts, architecture, BPMN process maps with pools and lanes, sequence) as Sigil/Excalidraw .excalidraw files. Use when the user asks for a diagram, flowchart, architecture sketch, process map or "draw this", or wants something opened in Sigil. Prefers the sigil-mcp tools; falls back to writing the file by hand.
+description: Draw clean diagrams (flowcharts, architecture, BPMN process maps with pools and lanes, sequence) as Sigil .sigil files (.excalidraw also works). Use when the user asks for a diagram, flowchart, architecture sketch, process map or "draw this", or wants something opened in Sigil. Prefers the sigil-mcp tools; falls back to writing the file by hand.
 ---
 
 # Drawing diagrams for Sigil
 
-Sigil opens `.excalidraw` files. You draw; the user's own assistant (you) does the thinking, and the local tools send nothing to any service.
+Sigil saves `.sigil` files and also opens `.excalidraw` ones; both hold the same JSON, so prefer `.sigil` and use `.excalidraw` only when the user asks to open the drawing in Excalidraw. You draw; the user's own assistant (you) does the thinking, and the local tools send nothing to any service.
 
 ## 1. Pick the route
 
@@ -14,7 +14,7 @@ Sigil opens `.excalidraw` files. You draw; the user's own assistant (you) does t
    - Anything where position matters, or any custom look: `create_diagram`.
 2. **No MCP?** Write the file yourself (section 5), then tell the user to open it in Sigil (File > Open, or drop it on the canvas).
 
-Pass an absolute `path` ending in `.excalidraw` so the user gets a file, and give them `open_url` when the tool returns one. The remote server (HTTP, `mcp.apollyoncorp.com`) refuses `path` because it writes nothing: leave it out, then give the user `open_url`, or save the returned JSON as a `.excalidraw` file for them.
+Pass an absolute `path` ending in `.sigil` (`.excalidraw` is also accepted) so the user gets a file, and give them `open_url` when the tool returns one. The remote server (HTTP, `mcp.apollyoncorp.com`) refuses `path` because it writes nothing: leave it out, then give the user `open_url`, or save the returned JSON as a `.sigil` file for them.
 
 ## 2. Layout rules (these make it look good)
 
@@ -50,7 +50,7 @@ Worked example (decision with two branches):
  {"type":"arrow","start":{"id":"s"},"end":{"id":"d"}},
  {"type":"arrow","start":{"id":"d"},"end":{"id":"y"},"label":{"text":"yes"}},
  {"type":"arrow","start":{"id":"d"},"end":{"id":"n"},"label":{"text":"no"}}
-],"path":"/abs/path/order.excalidraw"}
+],"path":"/abs/path/order.sigil"}
 ```
 
 ## 3b. BPMN processes (shape and flow entries)
@@ -94,7 +94,7 @@ Worked example (customer asks, support answers; two pools, two lanes, two messag
  {"flow":"association","from":"review","to":"tickets"},
  {"flow":"message","from":"submit","to":"request"},
  {"flow":"message","from":"resolve","to":"answer"}
-],"path":"/abs/path/support.excalidraw"}
+],"path":"/abs/path/support.sigil"}
 ```
 
 ## 4. Read the result and fix it
@@ -118,7 +118,7 @@ A validation error (`Not drawn. N problems`) lists each problem as `type #positi
 
 ## 5. No MCP: write the file by hand
 
-Write a UTF-8 file named `something.excalidraw` containing JSON with this envelope:
+Write a UTF-8 file named `something.sigil` containing JSON with this envelope:
 
 ```json
 {"type":"excalidraw","version":2,"source":"https://sigil.apollyoncorp.com","elements":[ ... ],"appState":{"viewBackgroundColor":"#ffffff"},"files":{}}

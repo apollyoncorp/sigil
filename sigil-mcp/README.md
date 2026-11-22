@@ -2,7 +2,7 @@
 
 An [MCP](https://modelcontextprotocol.io) server that lets your own AI assistant (Claude, Codex, Cursor, ...) draw diagrams for [Sigil](https://sigil.apollyoncorp.com), Apollyon's free drawing board (a fork of Excalidraw).
 
-**Privacy.** sigil-mcp only draws. It never calls an LLM. Run locally (the default, below), it never makes a network request either: your assistant sends it shapes, it writes a `.excalidraw` file on your disk and builds a link; that is all. The link carries the diagram inside it (`https://sigil.apollyoncorp.com/#data=...`): the part after `#` is never sent to any server, and Sigil reads it in your browser. The [remote server](#remote) is different, and says so plainly.
+**Privacy.** sigil-mcp only draws. It never calls an LLM. Run locally (the default, below), it never makes a network request either: your assistant sends it shapes, it writes a `.sigil` file on your disk and builds a link; that is all. The link carries the diagram inside it (`https://sigil.apollyoncorp.com/#data=...`): the part after `#` is never sent to any server, and Sigil reads it in your browser. The [remote server](#remote) is different, and says so plainly.
 
 ## Install
 
@@ -62,7 +62,7 @@ Other clients that speak Streamable HTTP take the same URL (`"type": "http", "ur
 
 **Differences from local.**
 
-- No diagram is written to disk. The `path` parameter is refused with an error; use the returned JSON (save it as `name.excalidraw`) or `open_url`.
+- No diagram is written to disk. The `path` parameter is refused with an error; use the returned JSON (save it as `name.sigil`) or `open_url`.
 - Free fair use, with limits per client IP: 30 requests per minute and 500 per day, plus a ceiling on the whole server. Over the limit you get `429` with a `Retry-After` header. The limits are kept on disk, so a restart or a redeploy does not reset them. A request body is capped at 1 MB and a request at 30 s.
 - Stateless: no sessions, no accounts, no keys. `GET /healthz` is a health check (it reports `"store":"ok"`, or `"error"` with status `503` when the database fails, so the container healthcheck notices); `/mcp` takes one JSON-RPC message per request (a batch, a JSON array, is `400`); `GET /stats` exists only when the operator sets a token (below); every other route is 404.
 
@@ -137,7 +137,7 @@ IPv6 clients are counted per /64. Counters live in the SQLite file (see above); 
 
 | tool | what it does |
 |---|---|
-| `create_diagram` | `{ elements, path? }`. Draws rectangles, ellipses, diamonds, text, lines, frames and arrows attached by id, plus ready-made BPMN and flowchart shapes (`{"shape":"bpmn.task","id":"t1","x":0,"y":0,"label":"Review"}`, pools with `lanes`) joined by flows (`{"flow":"sequence"|"message"|"association","from":"t1","to":"t2"}`), in the same hand-drawn style as Sigil's shape libraries. Writes `path` (must end in `.excalidraw`) or returns the JSON. Replies with `open_url` and a layout report (overlaps, labels that do not fit, unattached arrows, arrows through shapes, and the BPMN rules: message flow inside one pool, sequence flow across pools, element outside every pool, element on a lane boundary). |
+| `create_diagram` | `{ elements, path? }`. Draws rectangles, ellipses, diamonds, text, lines, frames and arrows attached by id, plus ready-made BPMN and flowchart shapes (`{"shape":"bpmn.task","id":"t1","x":0,"y":0,"label":"Review"}`, pools with `lanes`) joined by flows (`{"flow":"sequence"|"message"|"association","from":"t1","to":"t2"}`), in the same hand-drawn style as Sigil's shape libraries. Writes `path` (must end in `.sigil`; `.excalidraw` also works, same content) or returns the JSON. Replies with `open_url` and a layout report (overlaps, labels that do not fit, unattached arrows, arrows through shapes, and the BPMN rules: message flow inside one pool, sequence flow across pools, element outside every pool, element on a lane boundary). |
 | `mermaid_to_diagram` | `{ mermaid, path? }`. Converts flowchart, sequence, class, ER and state Mermaid to an editable diagram, laid out automatically. Same reply. |
 | `describe_format` | No input. A short cheat-sheet of the element fields, the BPMN and flowchart shape names, two examples and layout tips. |
 

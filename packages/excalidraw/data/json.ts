@@ -2,6 +2,7 @@ import {
   EXPORT_DATA_TYPES,
   getExportSource,
   MIME_TYPES,
+  SIGIL_FILE_EXTENSION,
   VERSIONS,
 } from "@excalidraw/common";
 
@@ -78,10 +79,17 @@ export const saveAsJSON = async ({
   data,
   filename,
   fileHandle,
+  extension = SIGIL_FILE_EXTENSION,
 }: {
   data: MaybePromise<JSONExportData>;
   filename: string;
   fileHandle: AppState["fileHandle"];
+  /**
+   * Sigil saves `.sigil` by default. The content is the same JSON in both
+   * cases, `.excalidraw` is only for opening the file in Excalidraw. Saving
+   * to an existing `fileHandle` keeps the name the user opened.
+   */
+  extension?: typeof SIGIL_FILE_EXTENSION | "excalidraw";
 }) => {
   const blob = Promise.resolve(data).then(({ elements, appState, files }) => {
     const serialized = serializeAsJSON(elements, appState, files, "local");
@@ -92,8 +100,8 @@ export const saveAsJSON = async ({
 
   const savedFileHandle = await fileSave(blob, {
     name: filename,
-    extension: "excalidraw",
-    description: "Excalidraw file",
+    extension,
+    description: extension === "excalidraw" ? "Excalidraw file" : "Sigil file",
     fileHandle: isImageFileHandle(fileHandle) ? null : fileHandle,
   });
   return { fileHandle: savedFileHandle };
@@ -104,10 +112,10 @@ export const loadFromJSON = async (
   localElements: readonly ExcalidrawElement[] | null,
 ) => {
   const file = await fileOpen({
-    description: "Excalidraw files",
+    description: "Sigil files",
     // ToDo: Be over-permissive until https://bugs.webkit.org/show_bug.cgi?id=34442
-    // gets resolved. Else, iOS users cannot open `.excalidraw` files.
-    // extensions: ["json", "excalidraw", "png", "svg"],
+    // gets resolved. Else, iOS users cannot open `.sigil` or `.excalidraw`
+    // files. Once it is, accept: sigil, excalidraw, json, png and svg.
   });
   return loadFromBlob(file, localAppState, localElements, file.handle);
 };

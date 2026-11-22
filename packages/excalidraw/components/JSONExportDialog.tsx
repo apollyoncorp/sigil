@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useRef } from "react";
 
 import { getFrame } from "@excalidraw/common";
 
@@ -46,8 +46,19 @@ const JSONExportModal = ({
   canvas: HTMLCanvasElement;
 }) => {
   const { onExportToBackend } = exportOpts;
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  // Dialog autofocuses the 2nd focusable element, which is now the secondary
+  // "Save as .excalidraw" link: keep the focus on the main save button
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      rootRef.current?.querySelector<HTMLElement>(".Card-button")?.focus();
+    });
+    return () => clearTimeout(timeout);
+  }, []);
+
   return (
-    <div className="ExportDialog ExportDialog--json">
+    <div className="ExportDialog ExportDialog--json" ref={rootRef}>
       <div className="ExportDialog-cards">
         {exportOpts.saveFileToDisk && (
           <Card color="lime">
@@ -68,6 +79,23 @@ const JSONExportModal = ({
                 actionManager.executeAction(actionSaveFileToDisk, "ui");
               }}
             />
+            <button
+              type="button"
+              className="Card-link-button"
+              onClick={() => {
+                actionManager.executeAction(
+                  actionSaveFileToDisk,
+                  "ui",
+                  "excalidraw",
+                );
+              }}
+              data-testid="save-as-excalidraw-button"
+            >
+              {t("exportDialog.sigil_excalidraw_button")}
+            </button>
+            <div className="Card-note">
+              {t("exportDialog.sigil_excalidraw_note")}
+            </div>
           </Card>
         )}
         {onExportToBackend && (
@@ -124,7 +152,11 @@ export const JSONExportDialog = ({
   return (
     <>
       {appState.openDialog?.name === "jsonExport" && (
-        <Dialog onCloseRequest={handleClose} title={t("buttons.export")}>
+        <Dialog
+          onCloseRequest={handleClose}
+          title={t("buttons.export")}
+          autofocus={false}
+        >
           <JSONExportModal
             elements={elements}
             appState={appState}

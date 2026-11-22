@@ -324,6 +324,11 @@ export const STRING_MIME_TYPES = {
   excalidrawlibIds: "application/vnd.excalidrawlib.ids+json",
 } as const;
 
+// Sigil: default extension of saved scenes. The content is the same JSON as
+// `.excalidraw` (and the same MIME type), so renaming a file between the two
+// extensions always works.
+export const SIGIL_FILE_EXTENSION = "sigil";
+
 export const MIME_TYPES = {
   ...STRING_MIME_TYPES,
   // image-encoded excalidraw data

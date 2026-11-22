@@ -7,14 +7,14 @@ import { MAX_ELEMENTS } from "./schema";
 import { createDiagram, formatOutcome, mermaidToDiagram } from "./tools";
 
 export const SERVER_NAME = "sigil-mcp";
-export const SERVER_VERSION = "0.3.0";
+export const SERVER_VERSION = "0.4.0";
 /** The tools this server registers (usage is counted per name). */
 export const TOOL_NAMES = ["create_diagram", "mermaid_to_diagram", "describe_format"] as const;
 
-const LOCAL_CREATE_EXAMPLE = `Example: {"elements":[{"type":"rectangle","id":"a","x":0,"y":0,"label":{"text":"Client"}},{"type":"rectangle","id":"b","x":300,"y":0,"label":{"text":"API"}},{"type":"arrow","start":{"id":"a"},"end":{"id":"b"},"label":{"text":"HTTPS"}}],"path":"/tmp/api.excalidraw"}`;
-const REMOTE_CREATE_EXAMPLE = LOCAL_CREATE_EXAMPLE.replace(',"path":"/tmp/api.excalidraw"', "");
+const LOCAL_CREATE_EXAMPLE = `Example: {"elements":[{"type":"rectangle","id":"a","x":0,"y":0,"label":{"text":"Client"}},{"type":"rectangle","id":"b","x":300,"y":0,"label":{"text":"API"}},{"type":"arrow","start":{"id":"a"},"end":{"id":"b"},"label":{"text":"HTTPS"}}],"path":"/tmp/api.sigil"}`;
+const REMOTE_CREATE_EXAMPLE = LOCAL_CREATE_EXAMPLE.replace(',"path":"/tmp/api.sigil"', "");
 
-export const createDiagramDescription = (remote = false) => `Draw a diagram as a Sigil/Excalidraw (.excalidraw) file from a list of shapes, text and arrows. ${
+export const createDiagramDescription = (remote = false) => `Draw a diagram as a Sigil (.sigil) file from a list of shapes, text and arrows. ${
   remote
     ? 'Remote server: the diagram is built on the server and returned in the reply; nothing is written to disk, so do not pass "path".'
     : "Nothing is sent anywhere; the file is made locally."
@@ -27,9 +27,9 @@ Call describe_format first if unsure of the fields.
 
 ${remote ? REMOTE_CREATE_EXAMPLE : LOCAL_CREATE_EXAMPLE}`;
 
-export const mermaidDescription = (remote = false) => `Turn Mermaid text into a Sigil/Excalidraw (.excalidraw) diagram, laid out automatically. Best for flowchart, sequence, class, ER and state diagrams; other diagram types are drawn as an image. ${remote ? "Runs on the remote server; nothing is written to disk." : "Runs locally."} Returns open_url like create_diagram.
+export const mermaidDescription = (remote = false) => `Turn Mermaid text into a Sigil (.sigil) diagram, laid out automatically. Best for flowchart, sequence, class, ER and state diagrams; other diagram types are drawn as an image. ${remote ? "Runs on the remote server; nothing is written to disk." : "Runs locally."} Returns open_url like create_diagram.
 Use this when the diagram is a plain graph and you do not need to control positions; use create_diagram for full control.
-Example: {"mermaid":"flowchart TD\\n  A[Start] --> B{Valid?}\\n  B -->|yes| C[Done]\\n  B -->|no| A"${remote ? "" : ',"path":"/tmp/flow.excalidraw"'}}`;
+Example: {"mermaid":"flowchart TD\\n  A[Start] --> B{Valid?}\\n  B -->|yes| C[Done]\\n  B -->|no| A"${remote ? "" : ',"path":"/tmp/flow.sigil"'}}`;
 
 export const CREATE_DIAGRAM_DESCRIPTION = createDiagramDescription();
 export const MERMAID_DESCRIPTION = mermaidDescription();
@@ -44,7 +44,7 @@ const pathField = (remote: boolean) =>
     .describe(
       remote
         ? "Not available on the remote server (it never writes files): leave it out. The reply carries the JSON and open_url."
-        : "Where to write the file, ending in .excalidraw (absolute is safest; the folder is created; an existing file is overwritten). Omit to get the JSON back in the reply instead.",
+        : "Where to write the file, ending in .sigil or .excalidraw (absolute is safest; the folder is created; an existing file is overwritten). Omit to get the JSON back in the reply instead.",
     );
 
 export type ServerOptions = {
@@ -57,8 +57,8 @@ export const createServer = ({ remote = false }: ServerOptions = {}) => {
     { name: SERVER_NAME, version: SERVER_VERSION },
     {
       instructions: remote
-        ? "Sigil diagram drawing (remote). Use create_diagram (or mermaid_to_diagram) and give the user the open_url from the reply, or the returned JSON saved as name.excalidraw. This server only draws; it does not call any model, and it writes nothing to disk, so never pass path."
-        : "Sigil diagram drawing. Use create_diagram (or mermaid_to_diagram) to write .excalidraw files the user opens in Sigil. This server only draws; it does not call any model or network service.",
+        ? "Sigil diagram drawing (remote). Use create_diagram (or mermaid_to_diagram) and give the user the open_url from the reply, or the returned JSON saved as name.sigil. This server only draws; it does not call any model, and it writes nothing to disk, so never pass path."
+        : "Sigil diagram drawing. Use create_diagram (or mermaid_to_diagram) to write .sigil files the user opens in Sigil. This server only draws; it does not call any model or network service.",
     },
   );
 

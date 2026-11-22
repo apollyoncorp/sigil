@@ -459,7 +459,7 @@ export default defineConfig(({ mode }) => {
             {
               action: "/",
               accept: {
-                "application/vnd.excalidraw+json": [".excalidraw"],
+                "application/vnd.excalidraw+json": [".sigil", ".excalidraw"],
               },
             },
           ],

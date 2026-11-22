@@ -11,7 +11,7 @@ A free, open-source drawing board for sketches, diagrams and wireframes, by [Apo
 ## What you can do
 
 - Draw on an infinite canvas in a hand-drawn style, with light and dark themes.
-- Open and save `.excalidraw` files, and export images.
+- Save drawings as `.sigil` files, open `.sigil` and `.excalidraw` files, and export images. "Save as .excalidraw" gives a copy you can open in Excalidraw.
 - Add ready-made BPMN and flowchart shapes from the main menu ("Add BPMN shapes", "Add flowchart shapes"). They are drawn in Sigil's own hand-drawn stroke and land in your library.
 - Search the canvas and run commands from the command palette.
 
@@ -25,7 +25,7 @@ Sigil has no account, no sign-in and no server for your drawings. They stay in y
 claude mcp add sigil -- npx -y @apollyoncorp/sigil-mcp
 ```
 
-Privacy: sigil-mcp only draws and never calls an LLM. Run locally, it never makes a network request: it writes a `.excalidraw` file on your disk and builds a link that carries the diagram after the `#`, a part the browser never sends to a server.
+Privacy: sigil-mcp only draws and never calls an LLM. Run locally, it never makes a network request: it writes a `.sigil` file on your disk and builds a link that carries the diagram after the `#`, a part the browser never sends to a server.
 
 No install: Apollyon also hosts it at `https://mcp.apollyoncorp.com/mcp` (`claude mcp add --transport http sigil https://mcp.apollyoncorp.com/mcp`). There the diagram passes through Apollyon's server, which does not store it or log its content, and usage is limited per IP. A Claude Code plugin bundles the local server with the `sigil-diagrams` skill: `/plugin marketplace add apollyoncorp/sigil`, then `/plugin install sigil@apollyon`. Setup for other clients and the tool list are in [`sigil-mcp/README.md`](sigil-mcp/README.md).
 
