@@ -378,11 +378,14 @@ describe("skill", () => {
     expect(front).not.toBeNull();
   });
 
-  it("its worked example draws with no warnings", async () => {
-    const json = /```json\n(\{"elements".*?)\n```/s.exec(skill)![1];
-    const input = JSON.parse(json);
-    delete input.path;
-    const out = await createDiagram(input);
-    expect(out.ok && out.warnings).toEqual([]);
+  it("its worked examples (flowchart and BPMN) draw with no warnings", async () => {
+    const blocks = [...skill.matchAll(/```json\n(\{"elements".*?)\n```/gs)];
+    expect(blocks.length).toBeGreaterThanOrEqual(2);
+    for (const [, json] of blocks) {
+      const input = JSON.parse(json);
+      delete input.path;
+      const out = await createDiagram(input);
+      expect(out.ok && out.warnings).toEqual([]);
+    }
   });
 });

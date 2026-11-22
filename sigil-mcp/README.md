@@ -39,9 +39,9 @@ Optional: copy `skill/sigil-diagrams/` into your assistant's skills folder (for 
 
 | tool | what it does |
 |---|---|
-| `create_diagram` | `{ elements, path? }`. Draws rectangles, ellipses, diamonds, text, lines, frames and arrows attached by id. Writes `path` (must end in `.excalidraw`) or returns the JSON. Replies with `open_url` and a layout report (overlaps, labels that do not fit, unattached arrows, arrows through shapes). |
+| `create_diagram` | `{ elements, path? }`. Draws rectangles, ellipses, diamonds, text, lines, frames and arrows attached by id, plus ready-made BPMN and flowchart shapes (`{"shape":"bpmn.task","id":"t1","x":0,"y":0,"label":"Review"}`, pools with `lanes`) joined by flows (`{"flow":"sequence"|"message"|"association","from":"t1","to":"t2"}`), in the same hand-drawn style as Sigil's shape libraries. Writes `path` (must end in `.excalidraw`) or returns the JSON. Replies with `open_url` and a layout report (overlaps, labels that do not fit, unattached arrows, arrows through shapes, and the BPMN rules: message flow inside one pool, sequence flow across pools, element outside every pool, element on a lane boundary). |
 | `mermaid_to_diagram` | `{ mermaid, path? }`. Converts flowchart, sequence, class, ER and state Mermaid to an editable diagram, laid out automatically. Same reply. |
-| `describe_format` | No input. A short cheat-sheet of the element fields, an example and layout tips. |
+| `describe_format` | No input. A short cheat-sheet of the element fields, the BPMN and flowchart shape names, two examples and layout tips. |
 
 `open_url` is left out when the link would be longer than about 200,000 characters; open the file instead (Sigil: menu, Open, or drop it on the canvas).
 
@@ -52,10 +52,12 @@ From the Sigil repo (`sigil-mcp/`), with the root dependencies installed:
 ```sh
 yarn install      # this package's dev dependencies
 yarn build        # bundles to dist/sigil-mcp.mjs (also regenerates the font metrics)
-yarn test         # vitest
+yarn test         # vitest (includes a check that public/libraries is not stale)
 yarn e2e          # SDK client over stdio against dist/
 npm pack          # tarball: one bundled file, no runtime dependencies
 ```
+
+The BPMN and flowchart shapes come from `src/shapes`, the same code that writes the `.excalidrawlib` files Sigil ships (`node scripts/build-libraries.mjs`, or `--check` to see whether the committed files are stale). Rebuilding reproduces them byte for byte.
 
 Text is measured from the real advance widths of Excalifont, Nunito, Lilita One and Cascadia (precomputed from the fonts in `packages/excalidraw/fonts`), so labels are sized as the browser will draw them.
 

@@ -99,5 +99,49 @@ const mm = await client.callTool({
 console.log(mm.content[0].text);
 assert(!mm.isError, "mermaid_to_diagram returned an error");
 
+// BPMN: the two-pool process of the skill, drawn from shapes and flows
+const skill = readFileSync(join(here, "../skill/sigil-diagrams/SKILL.md"), "utf8");
+const bpmnJson = [...skill.matchAll(/```json\n(\{"elements".*?)\n```/gs)]
+  .map((m) => m[1])
+  .find((s) => s.includes('"bpmn.pool"'));
+assert(bpmnJson, "skill has no BPMN example");
+const bpmn = JSON.parse(bpmnJson);
+bpmn.path = join(outDir, "support.excalidraw");
+const bp = await client.callTool({ name: "create_diagram", arguments: bpmn });
+assert(!bp.isError, `BPMN example rejected: ${bp.content[0].text}`);
+const bpSummary = JSON.parse(bp.content[0].text);
+assert(bpSummary.warnings.length === 0, `BPMN example warnings: ${bpSummary.warnings}`);
+assert(bpSummary.open_url, "BPMN open_url");
+console.log("BPMN: elements", bpSummary.elements, "open_url length", bpSummary.open_url.length);
+writeFileSync(join(outDir, "support.url.txt"), bpSummary.open_url + "\n");
+
+// a message flow between two elements of one pool must be reported
+const wrong = JSON.parse(bpmnJson);
+wrong.elements = wrong.elements.map((e) =>
+  e.flow === "message" && e.from === "submit" ? { ...e, to: "answer" } : e,
+);
+wrong.path = join(outDir, "support-wrong.excalidraw");
+const wr = await client.callTool({ name: "create_diagram", arguments: wrong });
+const wrSummary = JSON.parse(wr.content[0].text);
+console.log("wrong BPMN ->", wrSummary.warnings);
+assert(
+  wrSummary.warnings.some((w) => w.startsWith("message_flow_same_pool")),
+  "message_flow_same_pool warning",
+);
+writeFileSync(join(outDir, "support-wrong.url.txt"), wrSummary.open_url + "\n");
+writeFileSync(join(outDir, "support-wrong.warnings.txt"), wrSummary.warnings.join("\n") + "\n");
+
+// the schema refuses an unknown shape before anything is drawn
+const unknown = await client
+  .callTool({
+    name: "create_diagram",
+    arguments: { elements: [{ shape: "bpmn.nope", id: "a", x: 0, y: 0 }] },
+  })
+  .then(
+    (r) => r.isError,
+    () => true,
+  );
+assert(unknown, "unknown shape should be rejected");
+
 await client.close();
 console.log("E2E OK ->", outDir);

@@ -18,7 +18,7 @@ export const FILE_SOURCE = "https://sigil.apollyoncorp.com";
 
 export type Warning = { code: string; message: string };
 
-type Rect = { x: number; y: number; w: number; h: number };
+export type Rect = { x: number; y: number; w: number; h: number };
 
 const DEFAULT_FONT_SIZE = 20;
 const MIN_W = 180;
@@ -121,6 +121,8 @@ const stripUndefined = <T extends Record<string, unknown>>(o: T): T => {
 export type Prepared = {
   /** skeleton in upstream format */
   skeleton: any[];
+  /** position of each element in the list the caller sent (shapes and flows were taken out) */
+  positions: number[];
   /** id -> 1-based index in the user's list */
   indexById: Map<string, number>;
   /** user element by id */
@@ -128,8 +130,14 @@ export type Prepared = {
 };
 
 /** Turns the validated tool input into upstream skeleton elements. */
-export const prepare = (elements: Skeleton[]): Prepared => {
-  const used = new Set(elements.map((e) => e.id).filter(Boolean) as string[]);
+export const prepare = (
+  elements: Skeleton[],
+  opts: { positions?: number[]; reserved?: Iterable<string> } = {},
+): Prepared => {
+  const used = new Set([
+    ...(elements.map((e) => e.id).filter(Boolean) as string[]),
+    ...(opts.reserved ?? []),
+  ]);
   const withIds = elements.map((el, i) => {
     if (el.id) {
       return el;
@@ -271,7 +279,12 @@ export const prepare = (elements: Skeleton[]): Prepared => {
     }
   });
 
-  return { skeleton, indexById, byId };
+  return {
+    skeleton,
+    positions: opts.positions ?? elements.map((_, i) => i),
+    indexById,
+    byId,
+  };
 };
 
 export type ExcalidrawFile = {
@@ -301,15 +314,15 @@ export const convert = (skeleton: any[]) =>
 
 // ---------------------------------------------------------------- layout --
 
-const rectOf = (el: any): Rect => ({ x: el.x, y: el.y, w: el.width, h: el.height });
+export const rectOf = (el: any): Rect => ({ x: el.x, y: el.y, w: el.width, h: el.height });
 
-const contains = (a: Rect, b: Rect, tol = 1) =>
+export const contains = (a: Rect, b: Rect, tol = 1) =>
   b.x >= a.x - tol &&
   b.y >= a.y - tol &&
   b.x + b.w <= a.x + a.w + tol &&
   b.y + b.h <= a.y + a.h + tol;
 
-const intersection = (a: Rect, b: Rect) => {
+export const intersection = (a: Rect, b: Rect) => {
   const w = Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x);
   const h = Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y);
   return w > 0 && h > 0 ? { w, h } : null;
@@ -422,7 +435,7 @@ export const layoutReport = (
   return warnings;
 };
 
-const segmentCrosses = (p0: [number, number], p1: [number, number], r: Rect) => {
+export const segmentCrosses = (p0: [number, number], p1: [number, number], r: Rect) => {
   // slab method
   let tmin = 0;
   let tmax = 1;
@@ -454,7 +467,9 @@ export const namerFor = (prep: Prepared): Namer => {
   const list = [...prep.byId.values()];
   return (id: string) => {
     const idx = prep.indexById.get(id);
-    return idx === undefined ? id : describeElement(list[idx], idx);
+    return idx === undefined
+      ? id
+      : describeElement(list[idx], prep.positions[idx] ?? idx);
   };
 };
 

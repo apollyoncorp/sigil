@@ -48,16 +48,35 @@ const article = (w: string) => (/^[aeiou]/.test(w) ? "an" : "a");
 const truncate = (s: string, n = 28) =>
   s.length > n ? `${s.slice(0, n - 1)}…` : s.replace(/\n/g, " ");
 
-export const validateElements = (elements: Skeleton[]): string[] => {
+export type ValidateOptions = {
+  /**
+   * Position of each element in the list the caller received, when `elements`
+   * is only part of it (the rest being shapes and flows). Default: its own index.
+   */
+  positions?: number[];
+  /** ids taken by shape and flow entries (id -> what it is): they share one id space */
+  external?: Map<string, "shape" | "flow">;
+};
+
+export const validateElements = (
+  elements: Skeleton[],
+  options: ValidateOptions = {},
+): string[] => {
   const errors: string[] = [];
   const byId = new Map<string, number>();
+  const at = (i: number) => options.positions?.[i] ?? i;
+  const external = options.external ?? new Map();
 
   elements.forEach((el, i) => {
     if (el.id) {
       const first = byId.get(el.id);
       if (first !== undefined) {
         errors.push(
-          `${describeElement(el, i)}: duplicate id '${el.id}' (already used by #${first + 1}). Ids must be unique.`,
+          `${describeElement(el, at(i))}: duplicate id '${el.id}' (already used by #${at(first) + 1}). Ids must be unique.`,
+        );
+      } else if (external.has(el.id)) {
+        errors.push(
+          `${describeElement(el, at(i))}: duplicate id '${el.id}' (already used by a ${external.get(el.id)} entry). Ids must be unique.`,
         );
       } else {
         byId.set(el.id, i);
@@ -66,9 +85,10 @@ export const validateElements = (elements: Skeleton[]): string[] => {
   });
   const known = () =>
     byId.size ? `Known ids: ${[...byId.keys()].join(", ")}.` : "No element has an id yet; add \"id\" to the shapes arrows connect.";
+  const isShapeId = (id: string) => external.get(id) === "shape";
 
   elements.forEach((el, i) => {
-    const who = describeElement(el, i);
+    const who = describeElement(el, at(i));
 
     // fields that make no sense for this type
     for (const [field, types] of Object.entries(ONLY_FOR)) {
@@ -152,7 +172,11 @@ export const validateElements = (elements: Skeleton[]): string[] => {
           continue;
         }
         const idx = byId.get(ref.id);
-        if (idx === undefined) {
+        if (idx === undefined && isShapeId(ref.id)) {
+          errors.push(
+            `${who}: ${side}.id '${ref.id}' is a BPMN/flowchart shape; connect shapes with {"flow":"sequence","from":"...","to":"..."} instead of an arrow.`,
+          );
+        } else if (idx === undefined) {
           errors.push(`${who}: ${side}.id '${ref.id}' not found. ${known()}`);
         } else if (!BINDABLE.has(elements[idx].type)) {
           errors.push(
@@ -171,7 +195,9 @@ export const validateElements = (elements: Skeleton[]): string[] => {
       } else {
         for (const child of el.children) {
           const idx = byId.get(child);
-          if (idx === undefined) {
+          if (idx === undefined && isShapeId(child)) {
+            errors.push(`${who}: children id '${child}' is a BPMN/flowchart shape; frames wrap rectangle, ellipse, diamond, text or arrow elements.`);
+          } else if (idx === undefined) {
             errors.push(`${who}: children has id '${child}' which was not found. ${known()}`);
           } else if (elements[idx].type === "frame") {
             errors.push(`${who}: children id '${child}' is a frame; frames cannot be nested here.`);

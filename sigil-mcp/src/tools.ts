@@ -6,6 +6,15 @@ import {
   MAX_DATA_LINK_LENGTH,
 } from "../../excalidraw-app/data/dataLink";
 
+import { compile } from "./shapes";
+import {
+  buildDiagram,
+  claimedIds,
+  shapeReport,
+  splitEntries,
+  validateShapes,
+  type Entry,
+} from "./diagram";
 import {
   buildFile,
   convert,
@@ -18,7 +27,7 @@ import {
   type Warning,
 } from "./convert";
 import { mermaidToSkeleton } from "./mermaid";
-import { MAX_ELEMENTS, type Skeleton } from "./schema";
+import { MAX_ELEMENTS } from "./schema";
 import { validateElements } from "./validate";
 
 export const DEFAULT_SIGIL_URL = "https://sigil.apollyoncorp.com";
@@ -79,7 +88,7 @@ const quiet = <T>(fn: () => T): T => {
 };
 
 export const createDiagram = async (input: {
-  elements: Skeleton[];
+  elements: Entry[];
   path?: string;
 }): Promise<ToolOutcome> => {
   const { elements } = input;
@@ -92,7 +101,22 @@ export const createDiagram = async (input: {
       errors: [`too many elements (${elements.length}); the limit is ${MAX_ELEMENTS}. Split the diagram.`],
     };
   }
-  const errors = validateElements(elements);
+  const split = splitEntries(elements);
+  const withShapes = split.shapes.length + split.flows.length > 0;
+  const claimed = claimedIds(split);
+  const errors = validateElements(split.prims, {
+    positions: split.positions,
+    external: claimed,
+  });
+  if (withShapes) {
+    errors.push(
+      ...validateShapes(
+        split,
+        new Set(split.prims.map((p) => p.id).filter(Boolean) as string[]),
+        new Map(split.prims.filter((p) => p.id).map((p) => [p.id!, p.type])),
+      ),
+    );
+  }
   let outPath: string | undefined;
   if (input.path !== undefined) {
     const r = resolveOutPath(input.path);
@@ -106,22 +130,49 @@ export const createDiagram = async (input: {
     return { ok: false, errors };
   }
 
-  const prep = prepare(elements);
+  const prep = prepare(split.prims, {
+    positions: split.positions,
+    reserved: claimed.keys(),
+  });
   let converted: any[];
+  let warnings: Warning[];
   try {
-    converted = quiet(() => convert(prep.skeleton));
+    if (!withShapes) {
+      converted = quiet(() => convert(prep.skeleton));
+      warnings = layoutReport(
+        converted,
+        namerFor(prep),
+        requestedBindings(prep),
+        explicitWidths(prep),
+      );
+    } else {
+      // primitives and shapes go through one conversion, in the order given
+      const built = buildDiagram(elements, split, prep);
+      converted = quiet(() => compile(built.pieces));
+      const primIds = new Set(prep.byId.keys());
+      const mine = (e: any) => primIds.has(e.id) || primIds.has(e.containerId);
+      warnings = [
+        ...layoutReport(
+          converted.filter(mine),
+          namerFor(prep),
+          requestedBindings(prep),
+          explicitWidths(prep),
+        ),
+        ...shapeReport({
+          placed: built.placed,
+          flows: built.flows,
+          converted,
+          primIds,
+          primName: namerFor(prep),
+        }),
+      ];
+    }
   } catch (e) {
     return {
       ok: false,
       errors: [`conversion failed: ${(e as Error).message}. Check ids, coordinates and the children of frames.`],
     };
   }
-  const warnings = layoutReport(
-    converted,
-    namerFor(prep),
-    requestedBindings(prep),
-    explicitWidths(prep),
-  );
   const file = buildFile(converted);
   if (outPath) {
     await writeOut(outPath, file);

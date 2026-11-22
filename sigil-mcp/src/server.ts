@@ -2,16 +2,18 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 
 import { FORMAT_SHEET } from "./format";
-import { elementSchema, MAX_ELEMENTS } from "./schema";
+import { entrySchema } from "./diagram";
+import { MAX_ELEMENTS } from "./schema";
 import { createDiagram, formatOutcome, mermaidToDiagram } from "./tools";
 
 export const SERVER_NAME = "sigil-mcp";
-export const SERVER_VERSION = "0.1.0";
+export const SERVER_VERSION = "0.2.0";
 
 export const CREATE_DIAGRAM_DESCRIPTION = `Draw a diagram as a Sigil/Excalidraw (.excalidraw) file from a list of shapes, text and arrows. Nothing is sent anywhere; the file is made locally.
 
 Shapes: rectangle, ellipse, diamond (give "label": {"text": ...}; omit width/height to auto-fit, min 180x80). Connect them with arrows using "start": {"id"} and "end": {"id"}; give every connected shape an "id". Also: text, line, frame.
-Result: open_url (a link that opens the diagram directly in Sigil; share it with the user) plus warnings about overlapping shapes, labels that do not fit, arrows that are unattached or cut through a shape. Fix them and call again with the same path.
+BPMN and flowchart: an entry {"shape":"bpmn.task","id":"t1","x":0,"y":0,"label":"Review request"} draws a ready-made shape (bpmn.start-event, bpmn.exclusive-gateway, bpmn.pool with "lanes", flow.process, ...; describe_format lists them), and {"flow":"sequence"|"message"|"association","from":"t1","to":"g1","label":"yes"} connects two of them. Sequence flows stay inside one pool; message flows go between pools. These entries can sit next to plain elements in the same list.
+Result: open_url (a link that opens the diagram directly in Sigil; share it with the user) plus warnings about overlapping shapes, labels that do not fit, arrows that are unattached or cut through a shape, and BPMN rules (message flow inside one pool, sequence flow across pools, element outside every pool, element on a lane boundary). Fix them and call again with the same path.
 Call describe_format first if unsure of the fields.
 
 Example: {"elements":[{"type":"rectangle","id":"a","x":0,"y":0,"label":{"text":"Client"}},{"type":"rectangle","id":"b","x":300,"y":0,"label":{"text":"API"}},{"type":"arrow","start":{"id":"a"},"end":{"id":"b"},"label":{"text":"HTTPS"}}],"path":"/tmp/api.excalidraw"}`;
@@ -21,7 +23,7 @@ Use this when the diagram is a plain graph and you do not need to control positi
 Example: {"mermaid":"flowchart TD\\n  A[Start] --> B{Valid?}\\n  B -->|yes| C[Done]\\n  B -->|no| A","path":"/tmp/flow.excalidraw"}`;
 
 export const DESCRIBE_DESCRIPTION =
-  "Returns a short cheat-sheet of the create_diagram format: element fields, a 3-node flowchart example and layout tips (spacing, grid, sizes). No input. Call it once before your first diagram.";
+  "Returns a short cheat-sheet of the create_diagram format: element fields, the BPMN and flowchart shape names with a two-pool BPMN example, a 3-node flowchart example and layout tips (spacing, grid, sizes). No input. Call it once before your first diagram.";
 
 const pathField = z
   .string()
@@ -46,10 +48,12 @@ export const createServer = () => {
       description: CREATE_DIAGRAM_DESCRIPTION,
       inputSchema: {
         elements: z
-          .array(elementSchema)
+          .array(entrySchema)
           .min(1)
           .max(MAX_ELEMENTS)
-          .describe("Shapes, text and arrows, in drawing order (later ones on top)."),
+          .describe(
+            'Plain elements (with "type"), BPMN/flowchart shapes (with "shape") and flows (with "flow"), in drawing order (later ones on top). Draw pools first so they sit behind.',
+          ),
         path: pathField,
       },
       annotations: {

@@ -1,6 +1,6 @@
 ---
 name: sigil-diagrams
-description: Draw clean diagrams (flowcharts, architecture, process, sequence) as Sigil/Excalidraw .excalidraw files. Use when the user asks for a diagram, flowchart, architecture sketch, process map or "draw this", or wants something opened in Sigil. Prefers the sigil-mcp tools; falls back to writing the file by hand.
+description: Draw clean diagrams (flowcharts, architecture, BPMN process maps with pools and lanes, sequence) as Sigil/Excalidraw .excalidraw files. Use when the user asks for a diagram, flowchart, architecture sketch, process map or "draw this", or wants something opened in Sigil. Prefers the sigil-mcp tools; falls back to writing the file by hand.
 ---
 
 # Drawing diagrams for Sigil
@@ -37,7 +37,7 @@ Always pass an absolute `path` ending in `.excalidraw` so the user gets a file, 
 - **Loop back (retry):** place the target to the side, or add a small box on the axis; avoid a long arrow across other boxes (the report flags `arrow_crosses`).
 - **Swimlanes / groups:** a `frame` with `children: [ids]` and a `name`; keep each lane in its own column.
 - **Architecture:** layers as rows (clients, API, services, data), components as boxes in the row, arrows only between neighbouring layers.
-- BPMN-style notation (events, gateways, pools) comes later; for now use rectangles, diamonds and ellipses as above.
+- Process with several actors, events, gateways or pools: use the BPMN shapes (section 3b), not boxes.
 
 Worked example (decision with two branches):
 
@@ -53,17 +53,65 @@ Worked example (decision with two branches):
 ],"path":"/abs/path/order.excalidraw"}
 ```
 
+## 3b. BPMN processes (shape and flow entries)
+
+`create_diagram` also takes ready-made shapes, drawn in the same hand-drawn style as the "Shape libraries" in Sigil. Use them when the user asks for BPMN, a process with several actors, or hand-offs between teams. For a plain flowchart, rectangles and diamonds are enough (or `flow.process`, `flow.decision`... if they want standard flowchart symbols).
+
+- **Shape:** `{"shape":"bpmn.task","id":"t1","x":290,"y":110,"label":"Review request"}`. Position is the top-left corner; size is fixed (task 160x80, events 40x40, gateways 56x56). Names: `bpmn.start-event`, `bpmn.timer-start-event`, `bpmn.message-start-event`, `bpmn.intermediate-event`, `bpmn.intermediate-message-event`, `bpmn.end-event`, `bpmn.task`, `bpmn.sub-process`, `bpmn.exclusive-gateway`, `bpmn.parallel-gateway`, `bpmn.inclusive-gateway`, `bpmn.event-gateway`, `bpmn.data-object`, `bpmn.data-store`, `bpmn.text-annotation`, `bpmn.pool`; flowchart: `flow.terminator`, `flow.process`, `flow.decision`, `flow.input-output`, `flow.document`, `flow.predefined-process`, `flow.database`, `flow.manual-input`, `flow.connector`.
+- **Labels.** Tasks hold a short label (2 lines at most). Events, gateways and data get a name drawn next to them (below; gateways above): keep it short, leave 30 px of room for it, and use `"labelSide":"top"|"right"|"bottom"|"left"` when a flow arrives where the name would go (`arrow_crosses` says so).
+- **Flow:** `{"flow":"sequence","from":"t1","to":"g1","label":"yes"}`. `sequence` = solid arrow, the order of steps; `message` = dashed arrow, a message between participants; `association` = dotted line to a data store, data object or annotation. Flows attach to the shapes and follow them when moved.
+- **Pools and lanes.** One pool per participant (customer, support team, a system). Add `"lanes":["Agent","Specialist"]` to split a pool into departments or roles; give `width` and `height` (lane height 160 or more; defaults are 800 wide, 160 per lane). Draw pools first so they sit behind, and put every event, task and gateway fully inside one lane, clear of the name bands on the left (64 px with lanes, 32 without).
+- **The two rules.** Sequence flows stay inside one pool (a hand-off between lanes is still a sequence flow). Message flows go only between elements of different pools. Gateways: one entry, two or more exits, each exit labelled (`yes` / `no`); a start event has no entry, an end event no exit.
+- **Layout.** Left to right inside a pool; stack pools top to bottom, 80 px apart. Keep the elements that talk to each other in the same x range so message flows run straight and short. Keep flows clear of other shapes (`arrow_crosses`).
+
+Worked example (customer asks, support answers; two pools, two lanes, two message flows):
+
+```json
+{"elements":[
+ {"shape":"bpmn.pool","id":"support","x":0,"y":0,"width":880,"height":480,"label":"Support","lanes":["Agent","Specialist"]},
+ {"shape":"bpmn.pool","id":"customer","x":0,"y":560,"width":880,"height":160,"label":"Customer"},
+ {"shape":"bpmn.message-start-event","id":"request","x":210,"y":130,"label":"Request in","labelSide":"top"},
+ {"shape":"bpmn.task","id":"review","x":290,"y":110,"label":"Review request"},
+ {"shape":"bpmn.exclusive-gateway","id":"valid","x":502,"y":122,"label":"Valid?"},
+ {"shape":"bpmn.task","id":"reject","x":610,"y":110,"label":"Reject request"},
+ {"shape":"bpmn.end-event","id":"rejected","x":810,"y":130,"label":"Rejected"},
+ {"shape":"bpmn.task","id":"resolve","x":450,"y":320,"label":"Resolve issue"},
+ {"shape":"bpmn.end-event","id":"resolved","x":670,"y":340,"label":"Resolved"},
+ {"shape":"bpmn.data-store","id":"tickets","x":346,"y":24,"label":"Tickets","labelSide":"right"},
+ {"shape":"bpmn.start-event","id":"start","x":80,"y":620,"label":"Need help"},
+ {"shape":"bpmn.task","id":"submit","x":150,"y":600,"label":"Submit request"},
+ {"shape":"bpmn.intermediate-message-event","id":"answer","x":510,"y":620,"label":"Answer received"},
+ {"shape":"bpmn.end-event","id":"done","x":680,"y":620,"label":"Done"},
+ {"flow":"sequence","from":"start","to":"submit"},
+ {"flow":"sequence","from":"submit","to":"answer"},
+ {"flow":"sequence","from":"answer","to":"done"},
+ {"flow":"sequence","from":"request","to":"review"},
+ {"flow":"sequence","from":"review","to":"valid"},
+ {"flow":"sequence","from":"valid","to":"reject","label":"no"},
+ {"flow":"sequence","from":"reject","to":"rejected"},
+ {"flow":"sequence","from":"valid","to":"resolve","label":"yes"},
+ {"flow":"sequence","from":"resolve","to":"resolved"},
+ {"flow":"association","from":"review","to":"tickets"},
+ {"flow":"message","from":"submit","to":"request"},
+ {"flow":"message","from":"resolve","to":"answer"}
+],"path":"/abs/path/support.excalidraw"}
+```
+
 ## 4. Read the result and fix it
 
 The tool replies with `warnings`. Fix them and call again with the same `path` (it overwrites). Stop when the list is empty.
 
 | warning | meaning | fix |
 |---|---|---|
-| `overlap` | two shapes partly cover each other | move one so the gap is 60 px or more |
+| `overlap` | two shapes (or a shape and an event's name) partly cover each other | move one so the gap is 60 px or more (20 px for BPMN shapes) |
 | `label_too_wide` | label wider than the shape you sized, so it wraps | the message gives the width to set; or drop `width` to auto-fit; or shorten the text |
-| `label_too_tall` | wrapped label taller than the shape | raise `height` or shorten the text |
+| `label_too_tall` | wrapped label taller than the shape | raise `height` or shorten the text (BPMN and flowchart shapes have a fixed size: shorten) |
 | `arrow_unbound` | an arrow end is free, or its id could not attach | add `start`/`end` ids, check the id spelling, bring the shapes closer |
 | `arrow_crosses` | a straight arrow cuts through another shape | move that shape aside, or route via an extra box |
+| `message_flow_same_pool` | a message flow joins two elements of one pool (or there are no pools) | use a `sequence` flow inside a pool; keep `message` for flows between two pools |
+| `sequence_flow_crosses_pools` | a sequence flow joins elements of two pools | use a `message` flow between pools |
+| `element_outside_pools` | a BPMN element is outside every pool, sticks out of one, or sits on its name band | move it fully inside a pool, right of the name bands |
+| `lane_boundary` | an element straddles the line between two lanes | move it fully inside one lane |
 | `image_fallback` | (Mermaid) diagram type was added as a picture | use flowchart, sequence, class, ER or state, or redraw with `create_diagram` |
 
 A validation error (`Not drawn. N problems`) lists each problem as `type #position: what is wrong`. Fix all of them in one go.

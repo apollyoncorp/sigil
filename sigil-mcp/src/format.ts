@@ -30,6 +30,43 @@ fontFamily  Excalifont (default) | Nunito | "Lilita One" | Cascadia
   { "type": "arrow", "start": { "id": "ok" }, "end": { "id": "done" }, "label": { "text": "yes" } }
 ], "path": "/abs/path/flow.excalidraw" }
 
+## BPMN and flowchart shapes
+Entries of the same list, next to plain elements. Size is fixed; x, y is the top-left corner.
+{ "shape": "bpmn.task", "id": "t1", "x": 0, "y": 0, "label": "Review request" }
+{ "flow": "sequence" | "message" | "association", "from": "t1", "to": "g1", "label": "yes" }
+shape   bpmn.start-event, bpmn.timer-start-event, bpmn.message-start-event, bpmn.intermediate-event,
+        bpmn.intermediate-message-event, bpmn.end-event (40x40; label = name drawn below)
+        bpmn.task (160x80), bpmn.sub-process (label inside, 2 lines at most)
+        bpmn.exclusive-gateway, bpmn.parallel-gateway, bpmn.inclusive-gateway, bpmn.event-gateway
+        (56x56; label above)
+        bpmn.data-object, bpmn.data-store (label below), bpmn.text-annotation (label inside; width, height)
+        bpmn.pool  label = pool name; "lanes": ["Agent","Specialist"] cuts it into lanes;
+        width (default 800), height (default 160 per lane)
+        flow.terminator, flow.process, flow.decision, flow.input-output, flow.document,
+        flow.predefined-process, flow.database, flow.manual-input, flow.connector
+labelSide  top|right|bottom|left: side of the name of an event, gateway or data shape (keeps it clear of flows)
+id      required, unique, letters, numbers, - and _ only (no dots)
+flow    sequence = solid arrow: order of steps INSIDE one pool (also between lanes)
+        message  = dashed arrow: BETWEEN two pools only
+        association = dotted line to data / annotation
+Flows attach to shapes and join center to center; they cannot end on a pool, only on
+the elements inside it. Draw pools first (they sit behind). Every event, task and gateway
+goes fully inside one lane, right of the name bands (32px; 64px with lanes).
+Extra warnings: message_flow_same_pool, sequence_flow_crosses_pools, element_outside_pools, lane_boundary.
+
+## Example: two pools, one message
+{ "elements": [
+  { "shape": "bpmn.pool", "id": "cust", "x": 0, "y": 0,   "width": 640, "height": 160, "label": "Customer" },
+  { "shape": "bpmn.pool", "id": "shop", "x": 0, "y": 240, "width": 640, "height": 160, "label": "Shop" },
+  { "shape": "bpmn.start-event", "id": "s", "x": 80, "y": 60, "label": "Need item" },
+  { "shape": "bpmn.task", "id": "order", "x": 160, "y": 40, "label": "Place order" },
+  { "shape": "bpmn.task", "id": "ship", "x": 360, "y": 280, "label": "Ship order" },
+  { "shape": "bpmn.end-event", "id": "e", "x": 580, "y": 300, "label": "Shipped" },
+  { "flow": "sequence", "from": "s", "to": "order" },
+  { "flow": "message", "from": "order", "to": "ship", "label": "order" },
+  { "flow": "sequence", "from": "ship", "to": "e" }
+], "path": "/abs/path/shop.excalidraw" }
+
 ## Layout tips
 - Default box 180x80 (diamond 180x100). Omit width/height and the box fits its label.
 - Put boxes on a grid: columns 260px apart, rows 160px apart (gaps of 60-80px for arrows).
