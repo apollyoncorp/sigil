@@ -3,7 +3,7 @@
 // flowchart, and writes the files.
 //
 //   node scripts/e2e.mjs [outDir]
-import { mkdirSync, readFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -16,9 +16,20 @@ const outDir = resolve(process.argv[2] ?? join(tmpdir(), "sigil-mcp-e2e"));
 mkdirSync(outDir, { recursive: true });
 
 const client = new Client({ name: "sigil-e2e", version: "0.0.0" });
+// SIGIL_MCP_INSTALL_DIR=<dir> runs the server the way a user would: through
+// npx, from a directory where the packed tarball was installed (no repo, no
+// registry: --no-install).
+const installDir = process.env.SIGIL_MCP_INSTALL_DIR;
 await client.connect(
-  new StdioClientTransport({ command: process.execPath, args: [dist] }),
+  installDir
+    ? new StdioClientTransport({
+        command: "npx",
+        args: ["--no-install", "@apollyoncorp/sigil-mcp"],
+        cwd: installDir,
+      })
+    : new StdioClientTransport({ command: process.execPath, args: [dist] }),
 );
+console.log("server:", installDir ? `npx in ${installDir}` : dist);
 
 const assert = (cond, msg) => {
   if (!cond) {
@@ -53,6 +64,13 @@ const flow = {
 const res = await client.callTool({ name: "create_diagram", arguments: flow });
 console.log(res.content[0].text);
 assert(!res.isError, "create_diagram returned an error");
+const summary = JSON.parse(res.content[0].text);
+assert(
+  /^https:\/\/sigil\.apollyoncorp\.com\/#data=[A-Za-z0-9_-]+$/.test(summary.open_url),
+  "open_url",
+);
+console.log("open_url length:", summary.open_url.length);
+writeFileSync(join(outDir, "flow.url.txt"), summary.open_url + "\n");
 const file = JSON.parse(readFileSync(flow.path, "utf8"));
 assert(file.type === "excalidraw" && file.version === 2, "file header");
 assert(file.source === "https://sigil.apollyoncorp.com", "file source");

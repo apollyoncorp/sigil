@@ -2,6 +2,11 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 
 import {
+  buildDataLink,
+  MAX_DATA_LINK_LENGTH,
+} from "../../excalidraw-app/data/dataLink";
+
+import {
   buildFile,
   convert,
   explicitWidths,
@@ -16,6 +21,25 @@ import { mermaidToSkeleton } from "./mermaid";
 import { MAX_ELEMENTS, type Skeleton } from "./schema";
 import { validateElements } from "./validate";
 
+export const DEFAULT_SIGIL_URL = "https://sigil.apollyoncorp.com";
+
+/** Base URL of the Sigil editor; self-hosters point SIGIL_URL at theirs. */
+export const sigilBaseUrl = () => {
+  const fromEnv = process.env.SIGIL_URL?.trim();
+  return fromEnv && /^https?:\/\//i.test(fromEnv) ? fromEnv : DEFAULT_SIGIL_URL;
+};
+
+/** A link that carries the whole diagram: open it and Sigil shows it. */
+export const makeOpenUrl = (
+  file: ExcalidrawFile,
+  maxLength = MAX_DATA_LINK_LENGTH,
+) => {
+  const url = buildDataLink(sigilBaseUrl(), JSON.stringify(file));
+  return url.length <= maxLength
+    ? { openUrl: url as string | undefined, openUrlLength: url.length }
+    : { openUrl: undefined, openUrlLength: url.length };
+};
+
 export type ToolOutcome =
   | {
       ok: true;
@@ -23,6 +47,9 @@ export type ToolOutcome =
       path?: string;
       elementCount: number;
       warnings: Warning[];
+      openUrl?: string;
+      /** length the link would have had (set even when it was omitted) */
+      openUrlLength: number;
     }
   | { ok: false; errors: string[] };
 
@@ -99,7 +126,14 @@ export const createDiagram = async (input: {
   if (outPath) {
     await writeOut(outPath, file);
   }
-  return { ok: true, file, path: outPath, elementCount: converted.length, warnings };
+  return {
+    ok: true,
+    file,
+    path: outPath,
+    elementCount: converted.length,
+    warnings,
+    ...makeOpenUrl(file),
+  };
 };
 
 const nameFromElements = (elements: any[]) => {
@@ -170,7 +204,14 @@ export const mermaidToDiagram = async (input: {
   if (outPath) {
     await writeOut(outPath, file);
   }
-  return { ok: true, file, path: outPath, elementCount: converted.length, warnings };
+  return {
+    ok: true,
+    file,
+    path: outPath,
+    elementCount: converted.length,
+    warnings,
+    ...makeOpenUrl(file),
+  };
 };
 
 export const formatOutcome = (o: ToolOutcome) => {
@@ -185,16 +226,21 @@ export const formatOutcome = (o: ToolOutcome) => {
       ],
     };
   }
+  const where = o.path
+    ? "Open the written file in Sigil"
+    : "Save the JSON below as name.excalidraw and open it in Sigil";
+  const link = o.openUrl
+    ? "or give the user open_url (a link that opens the diagram directly)."
+    : `open_url was left out because the link would be ${o.openUrlLength} characters; open the file instead.`;
   const summary = {
     ok: true,
     ...(o.path ? { written: o.path } : {}),
+    ...(o.openUrl ? { open_url: o.openUrl } : {}),
     elements: o.elementCount,
     warnings: o.warnings.map((w) => `${w.code}: ${w.message}`),
     next: o.warnings.length
       ? "Fix the warnings and call again (same path overwrites the file)."
-      : o.path
-        ? "No layout warnings. Open the file in Sigil."
-        : "No layout warnings. Save the JSON below as name.excalidraw and open it in Sigil.",
+      : `No layout warnings. ${where}, ${link}`,
   };
   const content: { type: "text"; text: string }[] = [
     { type: "text", text: JSON.stringify(summary, null, 2) },

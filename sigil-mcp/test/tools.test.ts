@@ -1,4 +1,5 @@
 import { mkdtemp, readFile } from "node:fs/promises";
+import { readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -6,7 +7,13 @@ import { describe, expect, it } from "vitest";
 
 import { measureLine } from "../src/metrics";
 import { elementSchema, type Skeleton } from "../src/schema";
-import { createDiagram, formatOutcome, mermaidToDiagram } from "../src/tools";
+import {
+  createDiagram,
+  formatOutcome,
+  makeOpenUrl,
+  mermaidToDiagram,
+} from "../src/tools";
+import { decodeSceneData } from "../../excalidraw-app/data/dataLink";
 import { validateElements } from "../src/validate";
 
 const el = (e: Skeleton): Skeleton => e;
@@ -302,5 +309,80 @@ describe("mermaid_to_diagram", () => {
   it("turns bad syntax into an error, not a picture", async () => {
     const out = await mermaidToDiagram({ mermaid: "flowchart TD\n  A --> --> ((" });
     expect(out.ok).toBe(false);
+  });
+});
+
+describe("open_url", () => {
+  it("carries the whole diagram in the link", async () => {
+    const out = await createDiagram({ elements: flow });
+    expect(out.ok).toBe(true);
+    if (!out.ok) {
+      return;
+    }
+    expect(out.openUrl).toMatch(/^https:\/\/sigil\.apollyoncorp\.com\/#data=[A-Za-z0-9_-]+$/);
+    const payload = out.openUrl!.split("#data=")[1];
+    // what the editor decodes is the file
+    expect(JSON.parse(decodeSceneData(payload))).toEqual(out.file);
+    const reply = formatOutcome(out);
+    expect(JSON.parse(reply.content[0].text).open_url).toBe(out.openUrl);
+  });
+
+  it("honours SIGIL_URL for self-hosters", async () => {
+    process.env.SIGIL_URL = "https://draw.example.org/";
+    try {
+      const out = await createDiagram({ elements: flow });
+      expect(out.ok && out.openUrl!.startsWith("https://draw.example.org/#data=")).toBe(true);
+    } finally {
+      delete process.env.SIGIL_URL;
+    }
+  });
+
+  it("ignores a SIGIL_URL that is not http(s)", async () => {
+    process.env.SIGIL_URL = "javascript:alert(1)";
+    try {
+      const out = await createDiagram({ elements: flow });
+      expect(out.ok && out.openUrl!.startsWith("https://sigil.apollyoncorp.com/#data=")).toBe(true);
+    } finally {
+      delete process.env.SIGIL_URL;
+    }
+  });
+
+  it("omits the link when it would be too long, and says so", async () => {
+    const out = await createDiagram({ elements: flow });
+    if (!out.ok) {
+      throw new Error("expected ok");
+    }
+    const tooLong = makeOpenUrl(out.file, 100);
+    expect(tooLong.openUrl).toBeUndefined();
+    expect(tooLong.openUrlLength).toBeGreaterThan(100);
+    const reply = formatOutcome({ ...out, ...tooLong });
+    const summary = JSON.parse(reply.content[0].text);
+    expect(summary.open_url).toBeUndefined();
+    expect(summary.next).toMatch(/open_url was left out/);
+  });
+
+  it("mermaid_to_diagram returns it too", async () => {
+    const out = await mermaidToDiagram({ mermaid: "flowchart TD\n  A --> B" });
+    expect(out.ok && out.openUrl).toBeTruthy();
+  });
+});
+
+describe("skill", () => {
+  const skill = readFileSync(
+    join(__dirname, "../skill/sigil-diagrams/SKILL.md"),
+    "utf8",
+  );
+
+  it("has name and description frontmatter", () => {
+    const front = /^---\nname: sigil-diagrams\ndescription: .+\n---\n/.exec(skill);
+    expect(front).not.toBeNull();
+  });
+
+  it("its worked example draws with no warnings", async () => {
+    const json = /```json\n(\{"elements".*?)\n```/s.exec(skill)![1];
+    const input = JSON.parse(json);
+    delete input.path;
+    const out = await createDiagram(input);
+    expect(out.ok && out.warnings).toEqual([]);
   });
 });

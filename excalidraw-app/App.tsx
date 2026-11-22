@@ -106,6 +106,7 @@ import {
   isCollaborationLink,
 } from "./data";
 
+import { DATA_HASH_REGEX, decodeSceneData } from "./data/dataLink";
 import { updateStaleImageStatuses } from "./data/FileManager";
 import { FileStatusStore } from "./data/fileStatusStore";
 import {
@@ -221,6 +222,7 @@ const initializeScene = async (opts: {
     /^#json=([a-zA-Z0-9_-]+),([a-zA-Z0-9_-]+)$/,
   );
   const externalUrlMatch = window.location.hash.match(/^#url=(.*)$/);
+  const dataMatch = window.location.hash.match(DATA_HASH_REGEX);
 
   const localDataState = importFromLocalStorage();
 
@@ -305,6 +307,40 @@ const initializeScene = async (opts: {
         (await openConfirmModal(shareableLinkConfirmDialog))
       ) {
         return { scene: data, isExternalScene };
+      }
+    } catch (error: any) {
+      return {
+        scene: {
+          appState: {
+            errorMessage: t("alerts.invalidSceneUrl"),
+          },
+        },
+        isExternalScene,
+      };
+    }
+  } else if (dataMatch) {
+    // the scene travels inside the link (e.g. from sigil-mcp): nothing is
+    // fetched. Clear the hash first so that a refresh does not reload it.
+    window.history.replaceState(
+      {},
+      APP_NAME,
+      window.location.pathname + window.location.search,
+    );
+
+    try {
+      const data = await loadFromBlob(
+        new Blob([decodeSceneData(dataMatch[1])], { type: "application/json" }),
+        null,
+        null,
+      );
+      if (
+        !scene.elements.length ||
+        (await openConfirmModal(shareableLinkConfirmDialog))
+      ) {
+        return {
+          scene: { ...data, scrollToContent: true },
+          isExternalScene,
+        };
       }
     } catch (error: any) {
       return {
@@ -581,6 +617,15 @@ const ExcalidrawWrapper = () => {
               appState: restoreAppState(data.scene.appState, null),
               captureUpdate: CaptureUpdateAction.IMMEDIATELY,
             });
+            // a scene that came in through the link: show all of it
+            const loaded = excalidrawAPI.getSceneElements();
+            if (data.scene.scrollToContent && loaded.length) {
+              excalidrawAPI.setViewport({
+                target: loaded,
+                fit: "scale-down",
+                animation: false,
+              });
+            }
           }
         });
       }

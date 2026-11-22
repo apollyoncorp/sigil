@@ -11,12 +11,12 @@ export const SERVER_VERSION = "0.1.0";
 export const CREATE_DIAGRAM_DESCRIPTION = `Draw a diagram as a Sigil/Excalidraw (.excalidraw) file from a list of shapes, text and arrows. Nothing is sent anywhere; the file is made locally.
 
 Shapes: rectangle, ellipse, diamond (give "label": {"text": ...}; omit width/height to auto-fit, min 180x80). Connect them with arrows using "start": {"id"} and "end": {"id"}; give every connected shape an "id". Also: text, line, frame.
-Result: warnings about overlapping shapes, labels that do not fit, arrows that are unattached or cut through a shape. Fix them and call again with the same path.
+Result: open_url (a link that opens the diagram directly in Sigil; share it with the user) plus warnings about overlapping shapes, labels that do not fit, arrows that are unattached or cut through a shape. Fix them and call again with the same path.
 Call describe_format first if unsure of the fields.
 
 Example: {"elements":[{"type":"rectangle","id":"a","x":0,"y":0,"label":{"text":"Client"}},{"type":"rectangle","id":"b","x":300,"y":0,"label":{"text":"API"}},{"type":"arrow","start":{"id":"a"},"end":{"id":"b"},"label":{"text":"HTTPS"}}],"path":"/tmp/api.excalidraw"}`;
 
-export const MERMAID_DESCRIPTION = `Turn Mermaid text into a Sigil/Excalidraw (.excalidraw) diagram, laid out automatically. Best for flowchart, sequence, class, ER and state diagrams; other diagram types are drawn as an image. Runs locally.
+export const MERMAID_DESCRIPTION = `Turn Mermaid text into a Sigil/Excalidraw (.excalidraw) diagram, laid out automatically. Best for flowchart, sequence, class, ER and state diagrams; other diagram types are drawn as an image. Runs locally. Returns open_url like create_diagram.
 Use this when the diagram is a plain graph and you do not need to control positions; use create_diagram for full control.
 Example: {"mermaid":"flowchart TD\\n  A[Start] --> B{Valid?}\\n  B -->|yes| C[Done]\\n  B -->|no| A","path":"/tmp/flow.excalidraw"}`;
 

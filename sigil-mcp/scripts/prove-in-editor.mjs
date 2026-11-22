@@ -5,6 +5,7 @@
 //
 //   node scripts/prove-in-editor.mjs <http://localhost:PORT> <chromium> <file.excalidraw> <out.png> [...pairs]
 import { readFileSync } from "node:fs";
+import { inflateSync } from "node:zlib";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -20,7 +21,13 @@ let failed = false;
 
 for (let i = 0; i < rest.length; i += 2) {
   const [file, png] = [rest[i], rest[i + 1]];
-  const source = JSON.parse(readFileSync(file, "utf8"));
+  // a *.url.txt holds an open_url from sigil-mcp: open it as a link instead
+  const isLink = file.endsWith(".url.txt");
+  const link = isLink ? readFileSync(file, "utf8").trim() : "";
+  const payload = link.split("#data=")[1];
+  const source = isLink
+    ? JSON.parse(inflateSync(Buffer.from(payload, "base64url")).toString("utf8"))
+    : JSON.parse(readFileSync(file, "utf8"));
   const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
   const errors = [];
   page.on("pageerror", (e) => errors.push(String(e)));
@@ -28,14 +35,19 @@ for (let i = 0; i < rest.length; i += 2) {
   await page.addInitScript(() => {
     delete window.showOpenFilePicker;
   });
-  await page.goto(base, { waitUntil: "load" });
+  // the link's origin is the production one; serve it from the local build
+  await page.goto(isLink ? `${base}/#data=${payload}` : base, {
+    waitUntil: "load",
+  });
   await page.waitForSelector(".excalidraw", { timeout: 30000 });
 
   // the Open command (Ctrl/Cmd+O) creates the app's file input and clicks it
-  const chooser = page.waitForEvent("filechooser");
-  await page.locator(".excalidraw").first().click({ position: { x: 600, y: 450 } });
-  await page.keyboard.press("ControlOrMeta+o");
-  await (await chooser).setFiles(file);
+  if (!isLink) {
+    const chooser = page.waitForEvent("filechooser");
+    await page.locator(".excalidraw").first().click({ position: { x: 600, y: 450 } });
+    await page.keyboard.press("ControlOrMeta+o");
+    await (await chooser).setFiles(file);
+  }
   await page.waitForFunction(
     (n) => {
       try {
@@ -54,6 +66,7 @@ for (let i = 0; i < rest.length; i += 2) {
   await page.waitForTimeout(800);
   await page.screenshot({ path: png });
 
+  const hashAfterLoad = await page.evaluate(() => window.location.hash);
   // read back what the editor holds (it persists scene elements to localStorage)
   const els = await page.evaluate(() =>
     JSON.parse(localStorage.getItem("excalidraw") || "[]"),
@@ -89,10 +102,11 @@ for (let i = 0; i < rest.length; i += 2) {
       misplacedLabels: bad,
       arrows: arrows.length,
       arrowsAttachedBothEnds: attached,
+      ...(isLink ? { hashAfterLoad } : {}),
       pageErrors: errors,
     }),
   );
-  if (bad.length || attached !== arrows.length || live.length < source.elements.length || errors.length) {
+  if ((isLink && hashAfterLoad !== "") || bad.length || attached !== arrows.length || live.length < source.elements.length || errors.length) {
     failed = true;
   }
   await page.close();
