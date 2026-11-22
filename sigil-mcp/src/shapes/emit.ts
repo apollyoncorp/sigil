@@ -1,12 +1,13 @@
 // Writes the shape libraries as .excalidrawlib files.
-//   node scripts/build-libraries.mjs [--variant hand|clean] [--out <dir>] [--sample]
+//   node scripts/build-libraries.mjs [--variant hand|clean] [--out <dir>] [--sample] [--check]
+// --check writes nothing: it exits 1 when the files in <dir> are not what the
+// definitions produce (stale libraries).
 // --sample also writes sample-process.excalidraw (a diagram made of the shapes)
 // and gallery.excalidraw (every shape on a grid).
-import { mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 
-import { buildLibrary } from "./build";
-import { BPMN_SHAPES, FLOWCHART_SHAPES } from "./defs";
+import { buildLibrary, LIBRARY_FILES, libraryText } from "./build";
 import { gallery, sampleProcessFile } from "./sample";
 
 import type { Variant } from "./types";
@@ -21,16 +22,27 @@ if (variant !== "hand" && variant !== "clean") {
   throw new Error(`--variant must be "hand" or "clean", got "${variant}"`);
 }
 const out = resolve(arg("out", "public/libraries"));
-mkdirSync(out, { recursive: true });
+const check = process.argv.includes("--check");
+if (!check) {
+  mkdirSync(out, { recursive: true });
+}
 
-const sets = [
-  { file: "sigil-bpmn.excalidrawlib", defs: BPMN_SHAPES },
-  { file: "sigil-flowchart.excalidrawlib", defs: FLOWCHART_SHAPES },
-];
-for (const { file, defs } of sets) {
+let stale = 0;
+for (const { file, defs } of LIBRARY_FILES) {
   const lib = buildLibrary(defs, variant);
-  writeFileSync(join(out, file), JSON.stringify(lib) + "\n", "utf8");
-  console.log(`${join(out, file)}: ${lib.libraryItems.length} items (${variant})`);
+  const text = libraryText(lib);
+  const path = join(out, file);
+  if (check) {
+    const same = existsSync(path) && readFileSync(path, "utf8") === text;
+    console.log(`${path}: ${same ? "up to date" : "STALE"}`);
+    stale += same ? 0 : 1;
+  } else {
+    writeFileSync(path, text, "utf8");
+    console.log(`${path}: ${lib.libraryItems.length} items (${variant})`);
+  }
+}
+if (check) {
+  process.exit(stale ? 1 : 0);
 }
 
 if (process.argv.includes("--sample")) {

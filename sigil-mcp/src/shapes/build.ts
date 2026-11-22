@@ -3,7 +3,7 @@ import { getFontString } from "@excalidraw/common";
 import { convert, FILE_SOURCE } from "../convert";
 import { measureLine } from "../metrics";
 
-import { GRID } from "./defs";
+import { BPMN_SHAPES, FLOWCHART_SHAPES, GRID } from "./defs";
 
 import type {
   Arrowhead,
@@ -417,6 +417,8 @@ export const compile = (pieces: Piece[]): any[] => {
     el.seed = hash32(`${el.id}:seed`) % 2147483647;
     el.versionNonce = hash32(`${el.id}:nonce`) % 2147483647;
     el.updated = 1;
+    // the converter stamps the clock; a rebuild must reproduce the same bytes
+    el.created = 1;
   }
   return out;
 };
@@ -456,6 +458,15 @@ export const buildLibrary = (
   source: FILE_SOURCE,
   libraryItems: defs.map((d) => toLibraryItem(d, variant)),
 });
+
+/** The files the editor ships, one per set (public/libraries/). */
+export const LIBRARY_FILES = [
+  { file: "sigil-bpmn.excalidrawlib", defs: BPMN_SHAPES },
+  { file: "sigil-flowchart.excalidrawlib", defs: FLOWCHART_SHAPES },
+];
+
+/** Exact bytes of a library file. */
+export const libraryText = (lib: LibraryFile) => JSON.stringify(lib) + "\n";
 
 /** Axis-aligned bounds of a set of elements, the way the library lays them out. */
 export const boundsOf = (elements: any[]) => {

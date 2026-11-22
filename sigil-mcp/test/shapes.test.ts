@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
 import { getBoundTextMaxHeight, getBoundTextMaxWidth } from "@excalidraw/element";
 import { describe, expect, it } from "vitest";
 
@@ -6,10 +9,12 @@ import {
   BPMN_SHAPES,
   FLOWCHART_SHAPES,
   GRID,
+  LIBRARY_FILES,
   VARIANTS,
   boundsOf,
   buildLibrary,
   compile,
+  libraryText,
   link,
   placeShape,
   shapeById,
@@ -203,6 +208,17 @@ describe("determinism", () => {
       const a = JSON.stringify(buildLibrary(ALL_SHAPES, variant));
       const b = JSON.stringify(buildLibrary(ALL_SHAPES, variant));
       expect(a).toBe(b);
+    }
+  });
+
+  it("is not stale: public/libraries matches what the definitions produce", () => {
+    // fails after a shape change until `node sigil-mcp/scripts/build-libraries.mjs` is rerun
+    for (const { file, defs } of LIBRARY_FILES) {
+      const committed = readFileSync(
+        join(__dirname, "../../public/libraries", file),
+        "utf8",
+      );
+      expect(committed, file).toBe(libraryText(buildLibrary(defs, "hand")));
     }
   });
 
