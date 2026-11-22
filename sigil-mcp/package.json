@@ -1,0 +1,31 @@
+{
+  "name": "@apollyoncorp/sigil-mcp",
+  "version": "0.1.0",
+  "description": "MCP server that lets your own AI assistant draw diagrams for Sigil (.excalidraw files). It only draws: it never calls an LLM and never touches the network.",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "sigil-mcp": "dist/sigil-mcp.mjs"
+  },
+  "files": [
+    "dist/sigil-mcp.mjs"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build:metrics": "node scripts/build-metrics.mjs",
+    "build": "node scripts/build-metrics.mjs && node scripts/build.mjs",
+    "test": "node ../node_modules/vitest/vitest.mjs run --config vitest.config.mts",
+    "e2e": "node scripts/e2e.mjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.32.2",
+    "zod": "3.25.76"
+  },
+  "devDependencies": {
+    "fontkit": "2.0.4",
+    "linkedom": "0.18.12"
+  }
+}
