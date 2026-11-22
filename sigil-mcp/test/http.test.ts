@@ -1,5 +1,6 @@
 import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { connect, type AddressInfo } from "node:net";
+import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -12,6 +13,7 @@ import {
   bearerMatches,
   clientKey,
   createRemoteServer,
+  configProblem,
   loadHttpConfig,
   normalizeIp,
   originMatches,
@@ -239,6 +241,64 @@ describe("limits on the request", () => {
   });
 });
 
+describe("batch, slow body and per-client slots", () => {
+  it("refuses a JSON-RPC batch with 400 -32600 and still debits the limit", async () => {
+    const url = await start({ perMinute: 2 });
+    const batch = JSON.stringify([
+      { jsonrpc: "2.0", id: 1, method: "tools/list" },
+      { jsonrpc: "2.0", id: 2, method: "tools/list" },
+    ]);
+    const first = await post(url, batch);
+    expect(first.status).toBe(400);
+    expect(await first.json()).toMatchObject({ error: { code: -32600, message: "Batch requests are not supported." } });
+    expect((await post(url, batch)).status).toBe(400);
+    // two refused batches used the two requests of the minute
+    expect((await post(url, batch)).status).toBe(429);
+  });
+
+  it("answers 408 and closes when the body is too slow, and frees the slot", async () => {
+    const url = await start({ bodyTimeoutMs: 200, maxInFlightPerIp: 1 });
+    const { port } = new URL(url);
+    const reply = await new Promise<string>((resolve) => {
+      const s = connect(Number(port), "127.0.0.1");
+      let data = "";
+      s.on("data", (d) => (data += d));
+      s.on("close", () => resolve(data));
+      s.write(
+        "POST /mcp HTTP/1.1\r\nHost: x\r\nContent-Type: application/json\r\nCF-Connecting-IP: 198.51.100.1\r\nContent-Length: 500\r\n\r\n{",
+      );
+    });
+    expect(reply).toMatch(/^HTTP\/1\.1 408/);
+    expect(reply.toLowerCase()).toContain("connection: close");
+    // the slot is back (cap of 1 for this client)
+    expect((await post(url, rpc(1, "tools/list"))).status).toBe(200);
+  });
+
+  it("caps simultaneous requests per client before the body is read", async () => {
+    const url = await start({ maxInFlightPerIp: 2, bodyTimeoutMs: 3000 });
+    const { port } = new URL(url);
+    const hang = (ip: string) => {
+      const s = connect(Number(port), "127.0.0.1");
+      s.on("error", () => {});
+      s.write(
+        `POST /mcp HTTP/1.1\r\nHost: x\r\nContent-Type: application/json\r\nCF-Connecting-IP: ${ip}\r\nContent-Length: 500\r\n\r\n{`,
+      );
+      return s;
+    };
+    const held = [hang("198.51.100.1"), hang("198.51.100.1")];
+    await new Promise((r) => setTimeout(r, 150));
+    const third = await post(url, rpc(1, "tools/list"), { "cf-connecting-ip": "198.51.100.1" });
+    expect(third.status).toBe(503);
+    expect(third.headers.get("retry-after")).toBe("1");
+    // another client is not affected
+    expect((await post(url, rpc(2, "tools/list"), { "cf-connecting-ip": "198.51.100.2" })).status).toBe(200);
+    // the refused request was not debited and held no slot; closing frees them
+    for (const s of held) s.destroy();
+    await new Promise((r) => setTimeout(r, 150));
+    expect((await post(url, rpc(3, "tools/list"), { "cf-connecting-ip": "198.51.100.1" })).status).toBe(200);
+  });
+});
+
 describe("remote tools", () => {
   const connectClient = async (url: string) => {
     const client = new Client({ name: "http-test", version: "0.0.0" });
@@ -391,9 +451,29 @@ describe("configuration", () => {
     });
     expect(loadHttpConfig({}).originSecret).toBeUndefined();
     expect(loadHttpConfig({ SIGIL_MCP_ORIGIN_SECRET: "  " }).originSecret).toBeUndefined();
+    expect(loadHttpConfig({})).toMatchObject({ maxInFlightPerIp: 4, bodyTimeoutMs: 5000, allowNoOriginSecret: false });
+    expect(
+      loadHttpConfig({
+        SIGIL_MCP_MAX_IN_FLIGHT_PER_IP: "2",
+        SIGIL_MCP_BODY_TIMEOUT_MS: "900",
+        SIGIL_MCP_ALLOW_NO_ORIGIN_SECRET: "1",
+      }),
+    ).toMatchObject({ maxInFlightPerIp: 2, bodyTimeoutMs: 900, allowNoOriginSecret: true });
     // a short token would be guessable: /stats stays off
     expect(loadHttpConfig({ SIGIL_MCP_STATS_TOKEN: "short" }).statsToken).toBeUndefined();
     expect(loadHttpConfig({ SIGIL_MCP_RATE_PER_DAY: "abc" }).perDay).toBe(500);
+  });
+
+  it("refuses to start without a usable origin secret unless that is allowed", () => {
+    expect(configProblem(loadHttpConfig({}))).toMatch(/SIGIL_MCP_ORIGIN_SECRET is not set/);
+    expect(configProblem(loadHttpConfig({ SIGIL_MCP_ORIGIN_SECRET: "   " }))).toMatch(/not set/);
+    expect(configProblem(loadHttpConfig({ SIGIL_MCP_ORIGIN_SECRET: "short" }))).toMatch(/shorter than 16/);
+    // the opt-out covers a missing secret, not a weak one
+    expect(
+      configProblem(loadHttpConfig({ SIGIL_MCP_ORIGIN_SECRET: "short", SIGIL_MCP_ALLOW_NO_ORIGIN_SECRET: "1" })),
+    ).toMatch(/shorter than 16/);
+    expect(configProblem(loadHttpConfig({ SIGIL_MCP_ALLOW_NO_ORIGIN_SECRET: "1" }))).toBeUndefined();
+    expect(configProblem(loadHttpConfig({ SIGIL_MCP_ORIGIN_SECRET: "an-origin-secret-123" }))).toBeUndefined();
   });
 
   it("turns on with --http or SIGIL_MCP_HTTP", () => {
@@ -486,6 +566,38 @@ describe("limits survive a restart", () => {
     expect(a.take("k")).toMatchObject({ allowed: false, scope: "day" });
     a.close();
     b.close();
+  });
+});
+
+describe("rows written by refused requests", () => {
+  it("a request refused by the global cap leaves no row and no distinct count", () => {
+    const store = new Store(newDir(), { perMinute: 10, perDay: 10, globalPerMinute: 1 }, clock);
+    const a = store.hash("198.51.100.1");
+    const b = store.hash("198.51.100.2");
+    expect(store.take(a)).toEqual({ allowed: true });
+    expect(store.take(b)).toMatchObject({ allowed: false, scope: "global" });
+    expect(store.stats(1).total.distinct_ip_days).toBe(1);
+    expect(store.take(b)).toMatchObject({ allowed: false, scope: "global" });
+    expect(store.stats(1).total.distinct_ip_days).toBe(1);
+    // once the next minute opens, b is counted when it is finally allowed
+    now += 60_000;
+    expect(store.take(b)).toEqual({ allowed: true });
+    expect(store.stats(1).total.distinct_ip_days).toBe(2);
+    store.close();
+  });
+
+  it("indexes the minute buckets, on a new or an existing database", () => {
+    const dir = newDir();
+    new Store(dir, limits, clock).close();
+    const { DatabaseSync } = createRequire(import.meta.url)("node:sqlite") as typeof import("node:sqlite");
+    const db = new DatabaseSync(join(dir, "sigil-mcp.db"));
+    db.exec("DROP INDEX rate_minute_bucket");
+    db.close();
+    new Store(dir, limits, clock).close(); // reopens an old database
+    const check = new DatabaseSync(join(dir, "sigil-mcp.db"));
+    const plan = check.prepare("EXPLAIN QUERY PLAN DELETE FROM rate_minute WHERE bucket < 5").all();
+    check.close();
+    expect(JSON.stringify(plan)).toContain("rate_minute_bucket");
   });
 });
 
@@ -691,7 +803,8 @@ describe("when the database fails", () => {
     expect(all).not.toContain("203.0.113.5");
 
     const health = await fetch(`${url}/healthz`);
-    expect(health.status).toBe(200);
+    // 503, so the platform healthcheck (Dockerfile.remote) sees the failure
+    expect(health.status).toBe(503);
     expect(await health.json()).toMatchObject({ store: "error" });
     const stats = await fetch(`${url}/stats`, { headers: { authorization: "Bearer test-token-0123456789" } });
     expect(stats.status).toBe(503);

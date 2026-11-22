@@ -64,7 +64,7 @@ Other clients that speak Streamable HTTP take the same URL (`"type": "http", "ur
 
 - No diagram is written to disk. The `path` parameter is refused with an error; use the returned JSON (save it as `name.excalidraw`) or `open_url`.
 - Free fair use, with limits per client IP: 30 requests per minute and 500 per day, plus a ceiling on the whole server. Over the limit you get `429` with a `Retry-After` header. The limits are kept on disk, so a restart or a redeploy does not reset them. A request body is capped at 1 MB and a request at 30 s.
-- Stateless: no sessions, no accounts, no keys. `GET /healthz` is a health check (it also reports `"store":"ok"` or `"error"`); `GET /stats` exists only when the operator sets a token (below); every other route is 404.
+- Stateless: no sessions, no accounts, no keys. `GET /healthz` is a health check (it reports `"store":"ok"`, or `"error"` with status `503` when the database fails, so the container healthcheck notices); `/mcp` takes one JSON-RPC message per request (a batch, a JSON array, is `400`); `GET /stats` exists only when the operator sets a token (below); every other route is 404.
 
 ### What is saved
 
@@ -103,8 +103,11 @@ docker run -v sigil-mcp-data:/data -p 8080:8080 sigil-mcp-remote    # keep /data
 | `SIGIL_MCP_MAX_BODY_BYTES` | `1048576` | request body cap (413 above) |
 | `SIGIL_MCP_REQUEST_TIMEOUT_MS` | `30000` | per request (504 above) |
 | `SIGIL_MCP_MAX_IN_FLIGHT` | `16` | requests handled at once (503 above) |
+| `SIGIL_MCP_MAX_IN_FLIGHT_PER_IP` | `4` | requests handled at once per client key (503 above, checked before the body is read) |
+| `SIGIL_MCP_BODY_TIMEOUT_MS` | `5000` | time the request body may take to arrive (408 and the connection closes above) |
 | `SIGIL_MCP_TRUST_CF_HEADER` | `1` | read the client IP from `CF-Connecting-IP` and refuse (`403`) a `/mcp` request without a valid one; set `0` when not behind Cloudflare (then the socket address is used) |
-| `SIGIL_MCP_ORIGIN_SECRET` | unset | when set, `/mcp` and `/stats` need the header `X-Sigil-Origin-Auth: <secret>` or answer `403` (`/healthz` stays open) |
+| `SIGIL_MCP_ORIGIN_SECRET` | required | 16+ characters; `/mcp` and `/stats` need the header `X-Sigil-Origin-Auth: <secret>` or answer `403` (`/healthz` stays open). The server refuses to start (exit 1) without it, or with a shorter one |
+| `SIGIL_MCP_ALLOW_NO_ORIGIN_SECRET` | unset | `1` lets the server start with no origin secret (a missing secret only; a short one is still refused) |
 | `SIGIL_MCP_DATA_DIR` | `~/.sigil-mcp` (`/data` in the Docker image) | folder of the SQLite file: counters, salt, usage |
 | `SIGIL_MCP_STATS_TOKEN` | unset | Bearer token (16+ characters) for `GET /stats`; unset means 404 |
 | `SIGIL_URL` | `https://sigil.apollyoncorp.com` | where `open_url` points |
@@ -112,10 +115,10 @@ docker run -v sigil-mcp-data:/data -p 8080:8080 sigil-mcp-remote    # keep /data
 **Who can reach it, and why.** The limits are per client IP, so the server has to trust where the IP comes from.
 
 - Behind Cloudflare (the default, `SIGIL_MCP_TRUST_CF_HEADER=1`) the client IP is `CF-Connecting-IP`, and a `/mcp` request without a single valid address in it is refused with `403`. It never falls back to the socket address: behind a proxy that is the proxy's own address (everyone in one bucket), and a request that did not come through Cloudflare could be anyone. `X-Forwarded-For` is never read (anyone can write it, and a reverse proxy rewrites it). Cloudflare refuses a client that sends `CF-Connecting-IP` itself, so through the edge the header cannot be forged.
-- But a machine on the same network as the server (a LAN, a tailnet) can reach the reverse proxy directly and write `CF-Connecting-IP` as it likes, to dodge or poison the limits. That is what `SIGIL_MCP_ORIGIN_SECRET` is for: set a long random secret, and have Cloudflare add `X-Sigil-Origin-Auth: <secret>` to every request for the hostname (a Transform Rule, modify request header, on that host only). `/mcp` and `/stats` then answer `403` to anything without it, compared in constant time. Someone on the LAN does not have the secret. Without the variable nothing changes. The secret and the IP are never logged.
+- But a machine on the same network as the server (a LAN, a tailnet) can reach the reverse proxy directly and write `CF-Connecting-IP` as it likes, to dodge or poison the limits. That is what `SIGIL_MCP_ORIGIN_SECRET` is for: set a long random secret, and have Cloudflare add `X-Sigil-Origin-Auth: <secret>` to every request for the hostname (a Transform Rule, modify request header, on that host only). `/mcp` and `/stats` then answer `403` to anything without it, compared in constant time. Someone on the LAN does not have the secret. The server will not start without the variable (or `SIGIL_MCP_ALLOW_NO_ORIGIN_SECRET=1`, for a setup where nothing but the proxy can reach the port). The secret and the IP are never logged.
 - Not behind Cloudflare: set `SIGIL_MCP_TRUST_CF_HEADER=0`. The client IP is then the socket address and `CF-Connecting-IP` is ignored.
 
-IPv6 clients are counted per /64. Counters live in the SQLite file (see above); only the cap on simultaneous requests (`SIGIL_MCP_MAX_IN_FLIGHT`) is per process. Keep the port off the public internet (a Tunnel, no published port). No CORS headers are sent (MCP clients are not web pages, and a browser page therefore cannot use the endpoint); responses carry `X-Content-Type-Options: nosniff`.
+IPv6 clients are counted per /64. Counters live in the SQLite file (see above); only the caps on simultaneous requests (`SIGIL_MCP_MAX_IN_FLIGHT`, `SIGIL_MCP_MAX_IN_FLIGHT_PER_IP`) are per process. Keep the port off the public internet (a Tunnel, no published port). No CORS headers are sent (MCP clients are not web pages, and a browser page therefore cannot use the endpoint); responses carry `X-Content-Type-Options: nosniff`.
 
 ## Plugin
 
@@ -154,7 +157,7 @@ yarn start:http   # run the remote mode locally on :8080
 npm pack          # tarball: one bundled file, no runtime dependencies
 ```
 
-Release: bump `version` in `package.json`, commit, tag it `sigil-mcp-vX.Y.Z` (the same version) and push the tag. The `sigil-mcp-publish` workflow checks that the tag matches `package.json`, runs build, tests and e2e, and publishes to npm with trusted publishing (no token) and provenance. Run it from the Actions tab with `dry_run` on to rehearse without publishing.
+Release: bump `version` in `package.json`, commit, tag it `sigil-mcp-vX.Y.Z` (the same version) and push the tag. The `sigil-mcp-publish` workflow checks that the tag matches `package.json` and that the tagged commit is on `master`, then in a `build` job without publish rights runs build, tests, e2e and e2e:http and packs the tarball; a separate `publish` job (environment `npm`, no checkout, no install) publishes that exact tarball to npm with trusted publishing (no token) and provenance. Run it from the Actions tab with `dry_run` on to rehearse without publishing.
 
 The BPMN and flowchart shapes come from `src/shapes`, the same code that writes the `.excalidrawlib` files Sigil ships (`node scripts/build-libraries.mjs`, or `--check` to see whether the committed files are stale). Rebuilding reproduces them byte for byte.
 

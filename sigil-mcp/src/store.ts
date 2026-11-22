@@ -98,6 +98,7 @@ export class Store {
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL) WITHOUT ROWID;
       CREATE TABLE IF NOT EXISTS rate_minute (key TEXT NOT NULL, bucket INTEGER NOT NULL, n INTEGER NOT NULL, PRIMARY KEY (key, bucket)) WITHOUT ROWID;
+      CREATE INDEX IF NOT EXISTS rate_minute_bucket ON rate_minute(bucket);
       CREATE TABLE IF NOT EXISTS rate_global (bucket INTEGER PRIMARY KEY, n INTEGER NOT NULL);
       CREATE TABLE IF NOT EXISTS rate_day (day TEXT NOT NULL, key TEXT NOT NULL, n INTEGER NOT NULL, PRIMARY KEY (day, key)) WITHOUT ROWID;
       CREATE TABLE IF NOT EXISTS usage (day TEXT NOT NULL, tool TEXT NOT NULL, calls INTEGER NOT NULL DEFAULT 0, limited INTEGER NOT NULL DEFAULT 0, errors INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (day, tool)) WITHOUT ROWID;
@@ -166,10 +167,10 @@ export class Store {
    * Counts one request from `keyHash` when every limit allows it.
    *
    * Fixed windows: a minute is the wall-clock minute (UTC), a day is the UTC
-   * day. A denied request costs nothing against the counters. A client can
+   * day. A denied request costs nothing against the counters and writes no row. A client can
    * therefore send up to twice the per-minute limit across a minute boundary,
-   * and the per-day limit resets at 00:00 UTC. Also registers the client as
-   * seen today (distinct count in usage_day).
+   * and the per-day limit resets at 00:00 UTC. Also registers an allowed client
+   * as seen today (distinct count in usage_day).
    */
   take(keyHash: string): Verdict {
     const now = this.clock();
@@ -177,9 +178,6 @@ export class Store {
     const day = dayOf(now);
     return this.tx(() => {
       const db = this.db;
-      if (db.prepare("INSERT OR IGNORE INTO rate_day (day, key, n) VALUES (?, ?, 0)").run(day, keyHash).changes > 0) {
-        this.bumpIps(day);
-      }
       const n = (sql: string, ...args: (string | number)[]) =>
         Number((db.prepare(sql).get(...args) as Row | undefined)?.n ?? 0);
       const minute = n("SELECT n FROM rate_minute WHERE key = ? AND bucket = ?", keyHash, bucket);
@@ -199,6 +197,11 @@ export class Store {
           scope: worst.scope,
           retryAfterSec: Math.max(1, Math.ceil(worst.ms / 1000)),
         };
+      }
+      // only an allowed request leaves rows behind (a refused one is not
+      // written, so it cannot inflate the table or the distinct count)
+      if (db.prepare("INSERT OR IGNORE INTO rate_day (day, key, n) VALUES (?, ?, 0)").run(day, keyHash).changes > 0) {
+        this.bumpIps(day);
       }
       db.prepare(
         "INSERT INTO rate_minute (key, bucket, n) VALUES (?, ?, 1) ON CONFLICT (key, bucket) DO UPDATE SET n = n + 1",

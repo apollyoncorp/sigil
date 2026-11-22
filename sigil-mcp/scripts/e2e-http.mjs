@@ -89,6 +89,21 @@ const stopServer = () =>
 if (local) {
   port = await freePort();
   base = `http://127.0.0.1:${port}`;
+  // without an origin secret the server must refuse to start (exit 1) ...
+  const noSecret = (extra = {}) =>
+    new Promise((resolve) => {
+      const c = spawn(process.execPath, [dist, "--http"], {
+        env: { ...process.env, PORT: "0", HOST: "127.0.0.1", SIGIL_MCP_DATA_DIR: dataDir, SIGIL_MCP_ORIGIN_SECRET: "", ...extra },
+        stdio: "ignore",
+      });
+      const t = setTimeout(() => (c.kill("SIGTERM"), resolve("still running")), 5000);
+      c.once("exit", (code) => (clearTimeout(t), resolve(code)));
+    });
+  assert((await noSecret()) === 1, "no origin secret: exit 1");
+  assert((await noSecret({ SIGIL_MCP_ORIGIN_SECRET: "short" })) === 1, "short origin secret: exit 1");
+  // ... unless that is allowed on purpose
+  assert((await noSecret({ SIGIL_MCP_ALLOW_NO_ORIGIN_SECRET: "1" })) === "still running", "opt-out starts");
+  console.log("startup checks: ok");
   await startServer();
 }
 console.log("server:", local ? `${dist} --http` : base);

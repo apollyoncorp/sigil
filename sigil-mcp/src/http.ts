@@ -34,6 +34,10 @@ export type HttpConfig = {
   maxBodyBytes: number;
   requestTimeoutMs: number;
   maxInFlight: number;
+  /** simultaneous requests per client key (checked before the body is read) */
+  maxInFlightPerIp: number;
+  /** how long the body of a request may take to arrive (408 above) */
+  bodyTimeoutMs: number;
   /** read the client IP from CF-Connecting-IP (turn off when not behind Cloudflare) */
   trustCfHeader: boolean;
   /** folder of the SQLite file (counters, salt, usage); needs a persistent volume */
@@ -42,6 +46,8 @@ export type HttpConfig = {
   statsToken?: string;
   /** when set, /mcp and /stats need `X-Sigil-Origin-Auth: <this>` (Cloudflare adds it) */
   originSecret?: string;
+  /** SIGIL_MCP_ALLOW_NO_ORIGIN_SECRET=1: start without an origin secret */
+  allowNoOriginSecret: boolean;
 };
 
 export const ORIGIN_HEADER = "x-sigil-origin-auth";
@@ -81,13 +87,27 @@ const statsToken = (env: NodeJS.ProcessEnv) => {
 };
 
 const originSecret = (env: NodeJS.ProcessEnv) => {
-  const secret = env.SIGIL_MCP_ORIGIN_SECRET?.trim();
-  if (secret && secret.length < MIN_STATS_TOKEN_LENGTH) {
-    console.error(
-      `SIGIL_MCP_ORIGIN_SECRET is shorter than ${MIN_STATS_TOKEN_LENGTH} characters: easy to guess`,
-    );
+  // kept even when too short: configProblem() turns that into a startup error
+  return env.SIGIL_MCP_ORIGIN_SECRET?.trim() || undefined;
+};
+
+/**
+ * Why this configuration must not start, or undefined when it is fine. Remote
+ * mode without an origin secret lets anyone who can reach the port forge
+ * CF-Connecting-IP, so it is refused unless the operator opted out on purpose.
+ */
+export const configProblem = (config: HttpConfig) => {
+  if (!config.originSecret) {
+    return config.allowNoOriginSecret
+      ? undefined
+      : "SIGIL_MCP_ORIGIN_SECRET is not set. Set a random secret of " +
+          `${MIN_STATS_TOKEN_LENGTH}+ characters (and have Cloudflare send it as X-Sigil-Origin-Auth), ` +
+          "or set SIGIL_MCP_ALLOW_NO_ORIGIN_SECRET=1 to run without the check.";
   }
-  return secret || undefined;
+  if (config.originSecret.length < MIN_STATS_TOKEN_LENGTH) {
+    return `SIGIL_MCP_ORIGIN_SECRET is shorter than ${MIN_STATS_TOKEN_LENGTH} characters: easy to guess.`;
+  }
+  return undefined;
 };
 
 export const loadHttpConfig = (
@@ -101,10 +121,13 @@ export const loadHttpConfig = (
   maxBodyBytes: intEnv(env, "SIGIL_MCP_MAX_BODY_BYTES", 1_048_576),
   requestTimeoutMs: intEnv(env, "SIGIL_MCP_REQUEST_TIMEOUT_MS", 30_000),
   maxInFlight: intEnv(env, "SIGIL_MCP_MAX_IN_FLIGHT", 16),
+  maxInFlightPerIp: intEnv(env, "SIGIL_MCP_MAX_IN_FLIGHT_PER_IP", 4),
+  bodyTimeoutMs: intEnv(env, "SIGIL_MCP_BODY_TIMEOUT_MS", 5_000),
   trustCfHeader: !/^(0|false|no)$/i.test(env.SIGIL_MCP_TRUST_CF_HEADER ?? ""),
   dataDir: env.SIGIL_MCP_DATA_DIR?.trim() || join(homedir(), ".sigil-mcp"),
   statsToken: statsToken(env),
   originSecret: originSecret(env),
+  allowNoOriginSecret: env.SIGIL_MCP_ALLOW_NO_ORIGIN_SECRET?.trim() === "1",
 });
 
 // --- client address -------------------------------------------------------
@@ -185,7 +208,7 @@ const send = (
 
 type Body = { ok: true; json: unknown } | { ok: false; status: number; message: string };
 
-const readJsonBody = (req: IncomingMessage, maxBytes: number) =>
+const readJsonBody = (req: IncomingMessage, maxBytes: number, timeoutMs: number) =>
   new Promise<Body>((resolve) => {
     const declared = Number(req.headers["content-length"]);
     if (Number.isFinite(declared) && declared > maxBytes) {
@@ -198,10 +221,17 @@ const readJsonBody = (req: IncomingMessage, maxBytes: number) =>
     const finish = (b: Body) => {
       if (!done) {
         done = true;
+        clearTimeout(deadline);
         req.off("data", onData);
         resolve(b);
       }
     };
+    // a client that trickles the body must not hold a slot until the (longer)
+    // request timeout
+    const deadline = setTimeout(
+      () => finish({ ok: false, status: 408, message: "Request body timed out." }),
+      timeoutMs,
+    );
     const onData = (chunk: Buffer) => {
       size += chunk.length;
       if (size > maxBytes) {
@@ -300,6 +330,7 @@ export const createRemoteServer = (
       }),
     );
   let inFlight = 0;
+  const inFlightByKey = new Map<string, number>();
 
   const handleMcp = async (req: IncomingMessage, res: ServerResponse) => {
     // Stateless server: no session to delete and nothing to push, so GET
@@ -327,12 +358,27 @@ export const createRemoteServer = (
       return;
     }
 
+    // before the body is read: a slow sender must not be able to take every slot
+    if ((inFlightByKey.get(key) ?? 0) >= config.maxInFlightPerIp) {
+      send(res, 503, rpcError(-32000, "Too many simultaneous requests from this client. Try again shortly."), {
+        "Retry-After": 1,
+      });
+      return;
+    }
+
     inFlight++;
+    inFlightByKey.set(key, (inFlightByKey.get(key) ?? 0) + 1);
     let released = false;
     const release = () => {
       if (!released) {
         released = true;
         inFlight--;
+        const left = (inFlightByKey.get(key) ?? 1) - 1;
+        if (left > 0) {
+          inFlightByKey.set(key, left);
+        } else {
+          inFlightByKey.delete(key);
+        }
       }
     };
     let tool: UsageTool = "other";
@@ -371,8 +417,8 @@ export const createRemoteServer = (
     try {
       // The body is read before the limit check so a 429 can be attributed to
       // the tool that was called. It is bounded (size, time, in-flight cap).
-      const body = await readJsonBody(req, config.maxBodyBytes);
-      if (body.ok) {
+      const body = await readJsonBody(req, config.maxBodyBytes, config.bodyTimeoutMs);
+      if (body.ok && !Array.isArray(body.json)) {
         tool = toolOf(body.json);
       }
 
@@ -408,6 +454,12 @@ export const createRemoteServer = (
       }
       if (!body.ok) {
         send(res, body.status, rpcError(body.status === 400 ? -32700 : -32000, body.message), { Connection: "close" });
+        return;
+      }
+      // One message per request: a batch would run many tool calls for one
+      // debit of the limit. It is refused after the debit, like any bad body.
+      if (Array.isArray(body.json)) {
+        send(res, 400, rpcError(-32600, "Batch requests are not supported."));
         return;
       }
 
@@ -508,7 +560,12 @@ export const createRemoteServer = (
         } catch {
           storeState = "error";
         }
-        send(res, 200, JSON.stringify({ status: "ok", version: SERVER_VERSION, store: storeState }));
+        // 503 when the database fails, so the platform healthcheck notices
+        send(
+          res,
+          storeState === "ok" ? 200 : 503,
+          JSON.stringify({ status: "ok", version: SERVER_VERSION, store: storeState }),
+        );
       } else {
         send(res, 405, "Method not allowed", { Allow: "GET, HEAD" });
       }
@@ -541,6 +598,11 @@ export const createRemoteServer = (
 };
 
 export const startHttp = async (config: HttpConfig = loadHttpConfig()) => {
+  const problem = configProblem(config);
+  if (problem) {
+    console.error(`sigil-mcp: refusing to start (remote mode). ${problem}`);
+    process.exit(1);
+  }
   const remote = createRemoteServer(config);
   await new Promise<void>((resolve, reject) => {
     remote.server.once("error", reject);

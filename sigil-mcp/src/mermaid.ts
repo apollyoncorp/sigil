@@ -69,6 +69,9 @@ export const mermaidToSkeleton = async (definition: string) => {
       problems.push(
         String((args[1] as Error | undefined)?.message ?? first.split("\n")[0]),
       );
+      // captured into `problems`; never forwarded, the raw arguments may
+      // quote the diagram text
+      return;
     }
     originalError(...args);
   };

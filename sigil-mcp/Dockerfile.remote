@@ -26,10 +26,13 @@
 #   SIGIL_MCP_RATE_PER_MINUTE (30)  SIGIL_MCP_RATE_PER_DAY (500)  per client IP
 #   SIGIL_MCP_RATE_GLOBAL_PER_MINUTE (600)  SIGIL_MCP_MAX_BODY_BYTES (1048576)
 #   SIGIL_MCP_REQUEST_TIMEOUT_MS (30000)  SIGIL_MCP_MAX_IN_FLIGHT (16)
+#   SIGIL_MCP_MAX_IN_FLIGHT_PER_IP (4)  SIGIL_MCP_BODY_TIMEOUT_MS (5000)
 #   SIGIL_MCP_TRUST_CF_HEADER (1; /mcp without a valid CF-Connecting-IP is a 403;
 #                              0 when not behind Cloudflare: socket address)
-#   SIGIL_MCP_ORIGIN_SECRET (unset; when set, /mcp and /stats need the header
-#                            X-Sigil-Origin-Auth: <secret>, 403 otherwise)
+#   SIGIL_MCP_ORIGIN_SECRET (REQUIRED, 16+ characters: /mcp and /stats need the
+#                            header X-Sigil-Origin-Auth: <secret>, 403 otherwise;
+#                            the server exits 1 at startup without it)
+#   SIGIL_MCP_ALLOW_NO_ORIGIN_SECRET (unset; 1 = start with no origin secret)
 #   SIGIL_MCP_DATA_DIR (/data here)
 #   SIGIL_MCP_STATS_TOKEN (unset: GET /stats is a 404; 16+ characters to enable)
 #   SIGIL_URL (https://sigil.apollyoncorp.com; where open_url points)
