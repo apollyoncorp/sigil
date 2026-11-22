@@ -2,21 +2,21 @@
   .SigilLogo {
     display: flex;
     align-items: center;
-    gap: 0.6em;
+    gap: 0.5em;
     font-size: 2.25rem;
     color: var(--color-on-surface);
   }
 
   .SigilLogo__mark {
-    width: 1.15em;
-    height: 1.15em;
+    width: 0.98em;
+    height: 0.98em;
   }
 
-  .SigilLogo__mark-down {
+  .SigilLogo__mark-base {
     fill: #0a0b10;
   }
 
-  .SigilLogo__mark-up {
+  .SigilLogo__mark-accent {
     fill: #f2703a;
   }
 
@@ -33,7 +33,7 @@
       color: #e8e2d6;
     }
 
-    .SigilLogo__mark-down {
+    .SigilLogo__mark-base {
       fill: #e8e2d6;
     }
   }
