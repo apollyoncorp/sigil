@@ -142,7 +142,7 @@
     "toggleTheme": "Toggle light/dark theme",
     "theme": "Theme",
     "personalLib": "Personal Library",
-    "excalidrawLib": "Excalidraw Library",
+    "excalidrawLib": "Shape libraries",
     "decreaseFontSize": "Decrease font size",
     "increaseFontSize": "Increase font size",
     "unbindText": "Unbind text",
@@ -798,6 +798,8 @@
     "cliTagline": "for humans & AI"
   },
   "sigil": {
-    "basedOnExcalidraw": "Based on Excalidraw"
+    "basedOnExcalidraw": "Based on Excalidraw",
+    "addBpmnShapes": "Add BPMN shapes",
+    "addFlowchartShapes": "Add flowchart shapes"
   }
 }

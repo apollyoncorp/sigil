@@ -107,6 +107,7 @@ import {
 } from "./data";
 
 import { DATA_HASH_REGEX, decodeSceneData } from "./data/dataLink";
+import { isAllowedLibraryUrl } from "./data/shapeLibraries";
 import { updateStaleImageStatuses } from "./data/FileManager";
 import { FileStatusStore } from "./data/fileStatusStore";
 import {
@@ -476,6 +477,7 @@ const ExcalidrawWrapper = () => {
     adapter: LibraryIndexedDBAdapter,
     // TODO maybe remove this in several months (shipped: 24-03-11)
     migrationAdapter: LibraryLocalStorageMigrationAdapter,
+    validateLibraryUrl: isAllowedLibraryUrl,
   });
 
   const [, forceRefresh] = useState(false);

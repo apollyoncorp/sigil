@@ -1,10 +1,11 @@
 import {
   eyeIcon,
+  LibraryIcon,
   ExternalLinkIcon,
   GithubIcon,
 } from "@excalidraw/excalidraw/components/icons";
 import { useI18n } from "@excalidraw/excalidraw/i18n";
-import { MainMenu } from "@excalidraw/excalidraw/index";
+import { MainMenu, useExcalidrawAPI } from "@excalidraw/excalidraw/index";
 import React from "react";
 
 import { isDevEnv } from "@excalidraw/common";
@@ -12,6 +13,7 @@ import { isDevEnv } from "@excalidraw/common";
 import type { Theme } from "@excalidraw/element/types";
 
 import { LanguageList } from "../app-language/LanguageList";
+import { addShapeLibrary } from "../data/shapeLibraries";
 
 import { saveDebugState } from "./DebugCanvas";
 
@@ -23,6 +25,7 @@ export const AppMainMenu: React.FC<{
   refresh: () => void;
 }> = React.memo((props) => {
   const { t } = useI18n();
+  const excalidrawAPI = useExcalidrawAPI();
   return (
     <MainMenu>
       <MainMenu.DefaultItems.LoadScene />
@@ -37,6 +40,20 @@ export const AppMainMenu: React.FC<{
       )}
       <MainMenu.DefaultItems.CommandPalette className="highlighted" />
       <MainMenu.DefaultItems.SearchMenu />
+      <MainMenu.Item
+        icon={LibraryIcon}
+        onSelect={() => excalidrawAPI && addShapeLibrary(excalidrawAPI, "bpmn")}
+      >
+        {t("sigil.addBpmnShapes")}
+      </MainMenu.Item>
+      <MainMenu.Item
+        icon={LibraryIcon}
+        onSelect={() =>
+          excalidrawAPI && addShapeLibrary(excalidrawAPI, "flowchart")
+        }
+      >
+        {t("sigil.addFlowchartShapes")}
+      </MainMenu.Item>
       <MainMenu.DefaultItems.Help />
       <MainMenu.DefaultItems.ClearCanvas />
       <MainMenu.Separator />
