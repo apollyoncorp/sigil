@@ -124,6 +124,8 @@ yarn start:http   # run the remote mode locally on :8080
 npm pack          # tarball: one bundled file, no runtime dependencies
 ```
 
+Release: bump `version` in `package.json`, commit, tag it `sigil-mcp-vX.Y.Z` (the same version) and push the tag. The `sigil-mcp-publish` workflow checks that the tag matches `package.json`, runs build, tests and e2e, and publishes to npm with trusted publishing (no token) and provenance. Run it from the Actions tab with `dry_run` on to rehearse without publishing.
+
 The BPMN and flowchart shapes come from `src/shapes`, the same code that writes the `.excalidrawlib` files Sigil ships (`node scripts/build-libraries.mjs`, or `--check` to see whether the committed files are stale). Rebuilding reproduces them byte for byte.
 
 Text is measured from the real advance widths of Excalifont, Nunito, Lilita One and Cascadia (precomputed from the fonts in `packages/excalidraw/fonts`), so labels are sized as the browser will draw them.

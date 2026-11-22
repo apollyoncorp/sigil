@@ -1,0 +1,135 @@
+name: Publish sigil-mcp
+
+# Publishes @apollyoncorp/sigil-mcp to npm with trusted publishing (OIDC): no
+# NPM_TOKEN secret exists. The trusted publisher on npmjs.com must be set to
+#   owner: apollyoncorp | repository: sigil
+#   workflow filename: sigil-mcp-publish.yml | environment: npm
+# See sigil-mcp/README.md ("Release") for the steps.
+
+on:
+  push:
+    tags:
+      - "sigil-mcp-v*"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Dry run: build, test and pack, but do not publish"
+        type: boolean
+        default: true
+
+# One release at a time; a running publish is never cancelled halfway.
+concurrency:
+  group: sigil-mcp-publish
+  cancel-in-progress: false
+
+permissions: {}
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # Add required reviewers to this environment (Settings > Environments) to
+    # make every publish wait for a manual approval.
+    environment: npm
+    permissions:
+      contents: read
+      id-token: write # npm trusted publishing (OIDC) and provenance
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          # No dependency cache in a job that can publish (cache poisoning).
+          package-manager-cache: false
+
+      - name: Decide what to do and check the version
+        id: plan
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+          DRY_RUN_INPUT: ${{ inputs.dry_run }}
+        run: |
+          set -euo pipefail
+          version="$(node -p "require('./sigil-mcp/package.json').version")"
+          name="$(node -p "require('./sigil-mcp/package.json').name")"
+
+          dry_run=false
+          if [ "$EVENT_NAME" = "workflow_dispatch" ] && [ "$DRY_RUN_INPUT" = "true" ]; then
+            dry_run=true
+          fi
+          # Only a tag may publish; a manual run from a branch is always a dry run.
+          if [ "$REF_TYPE" != "tag" ]; then
+            dry_run=true
+          else
+            tag_version="${REF_NAME#sigil-mcp-v}"
+            if [ "$REF_NAME" = "$tag_version" ] || [ "$tag_version" != "$version" ]; then
+              echo "::error::Tag $REF_NAME does not match sigil-mcp/package.json version $version (expected sigil-mcp-v$version)"
+              exit 1
+            fi
+          fi
+
+          # A prerelease version needs an explicit dist-tag (npm refuses otherwise).
+          dist_tag=latest
+          case "$version" in *-*) dist_tag=next ;; esac
+
+          if [ "$dry_run" = "false" ] && npm view "$name@$version" version >/dev/null 2>&1; then
+            echo "::error::$name@$version is already on npm; bump the version and tag again"
+            exit 1
+          fi
+
+          {
+            echo "version=$version"
+            echo "name=$name"
+            echo "dry_run=$dry_run"
+            echo "dist_tag=$dist_tag"
+          } >> "$GITHUB_OUTPUT"
+          echo "Package $name@$version, dry_run=$dry_run, dist-tag=$dist_tag"
+
+      - name: Ensure npm supports trusted publishing (>= 11.5.1)
+        run: |
+          set -euo pipefail
+          current="$(npm --version)"
+          echo "npm $current, node $(node --version)"
+          if [ "$(printf '%s\n' 11.5.1 "$current" | sort -V | head -n1)" != "11.5.1" ]; then
+            npm install -g npm@^11.5.1
+            echo "npm now $(npm --version)"
+          fi
+
+      - name: Install dependencies (repo root)
+        run: yarn install --frozen-lockfile
+
+      - name: Install dependencies (sigil-mcp)
+        working-directory: sigil-mcp
+        run: yarn install --frozen-lockfile
+
+      - name: Build
+        working-directory: sigil-mcp
+        run: yarn build
+
+      - name: Unit tests
+        working-directory: sigil-mcp
+        run: yarn test
+
+      - name: End-to-end test
+        working-directory: sigil-mcp
+        run: yarn e2e
+
+      # prepack rebuilds dist/ right before the tarball is made. (npm pack, not
+      # npm publish --dry-run: the latter fails when the version already exists.)
+      - name: Pack dry run
+        if: steps.plan.outputs.dry_run == 'true'
+        working-directory: sigil-mcp
+        run: npm pack --dry-run
+
+      # Provenance is automatic with trusted publishing from a public repo.
+      - name: Publish to npm
+        if: steps.plan.outputs.dry_run != 'true'
+        working-directory: sigil-mcp
+        run: npm publish --tag "${{ steps.plan.outputs.dist_tag }}"
