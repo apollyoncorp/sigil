@@ -124,6 +124,24 @@ const findPartsForData = (data: any, parts: string[]) => {
   return data;
 };
 
+// Sigil: the host app can override the text of upstream keys without editing
+// the locale files (see excalidraw-app/sigilStrings.ts). An override is the
+// replacement string, or a function that receives the text already translated
+// into the current language and the language code.
+export type TranslationOverride =
+  | string
+  | ((translation: string, langCode: string) => string);
+
+let translationOverrides: Partial<
+  Record<TranslationKeys, TranslationOverride>
+> = {};
+
+export const setTranslationOverrides = (
+  overrides: Partial<Record<TranslationKeys, TranslationOverride>>,
+) => {
+  translationOverrides = overrides;
+};
+
 export const t = (
   path: NestedKeyOf<typeof fallbackLangData>,
   replacement?: { [key: string]: string | number } | null,
@@ -149,6 +167,14 @@ export const t = (
       return "";
     }
     throw new Error(errorMessage);
+  }
+
+  const override = translationOverrides[path];
+  if (override !== undefined) {
+    translation =
+      typeof override === "function"
+        ? override(translation, currentLang.code)
+        : override;
   }
 
   if (replacement) {

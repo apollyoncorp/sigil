@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import { registerSW } from "virtual:pwa-register";
 
 import ExcalidrawApp from "./App";
+import "./sigilStrings";
 
 // the entry's JavaScript and CSS loaded and ran (`scripts/stats/perf.mjs`)
 performance.mark("excalidraw:app-start");
