@@ -1,7 +1,7 @@
 {
   "name": "sigil",
   "displayName": "Sigil diagrams",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Draw diagrams (flowcharts, architecture, BPMN) for Sigil from your assistant: the sigil-mcp tools plus the sigil-diagrams skill.",
   "author": { "name": "Apollyon Corporation", "url": "https://apollyoncorp.com" },
   "homepage": "https://sigil.apollyoncorp.com",

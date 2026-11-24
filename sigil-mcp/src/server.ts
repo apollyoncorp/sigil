@@ -7,7 +7,7 @@ import { MAX_ELEMENTS } from "./schema";
 import { createDiagram, formatOutcome, mermaidToDiagram } from "./tools";
 
 export const SERVER_NAME = "sigil-mcp";
-export const SERVER_VERSION = "0.4.0";
+export const SERVER_VERSION = "0.4.1";
 /** The tools this server registers (usage is counted per name). */
 export const TOOL_NAMES = ["create_diagram", "mermaid_to_diagram", "describe_format"] as const;
 

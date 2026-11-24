@@ -1,6 +1,6 @@
 {
   "name": "@apollyoncorp/sigil-mcp",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "MCP server that lets your own AI assistant draw diagrams for Sigil (.sigil files). It only draws: it never calls an LLM and never touches the network.",
   "license": "MIT",
   "type": "module",
