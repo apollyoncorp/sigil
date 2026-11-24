@@ -22,7 +22,7 @@ export const createDiagramDescription = (remote = false) => `Draw a diagram as a
 
 Shapes: rectangle, ellipse, diamond (give "label": {"text": ...}; omit width/height to auto-fit, min 180x80). Connect them with arrows using "start": {"id"} and "end": {"id"}; give every connected shape an "id". Also: text, line, frame.
 BPMN and flowchart: an entry {"shape":"bpmn.task","id":"t1","x":0,"y":0,"label":"Review request"} draws a ready-made shape (bpmn.start-event, bpmn.exclusive-gateway, bpmn.pool with "lanes", flow.process, ...; describe_format lists them), and {"flow":"sequence"|"message"|"association","from":"t1","to":"g1","label":"yes"} connects two of them. Sequence flows stay inside one pool; message flows go between pools. These entries can sit next to plain elements in the same list.
-Result: open_url (a link that opens the diagram directly in Sigil; share it with the user) plus warnings about overlapping shapes, labels that do not fit, arrows that are unattached or cut through a shape, and BPMN rules (message flow inside one pool, sequence flow across pools, element outside every pool, element on a lane boundary). Fix them and call again${remote ? "" : " with the same path"}.
+Result: open_url (a link that opens the diagram directly in Sigil; share it with the user) plus warnings about overlapping shapes or frames, labels that do not fit, arrows that are unattached or cut through a shape, and BPMN rules (message flow inside one pool, sequence flow across pools, element outside every pool, element on a lane boundary). Fix them and call again${remote ? "" : " with the same path"}.
 Call describe_format first if unsure of the fields.
 
 ${remote ? REMOTE_CREATE_EXAMPLE : LOCAL_CREATE_EXAMPLE}`;

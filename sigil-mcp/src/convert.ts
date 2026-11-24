@@ -3,6 +3,7 @@ import {
   convertToExcalidrawElements,
   getBoundTextMaxHeight,
   getBoundTextMaxWidth,
+  getCommonBounds,
   setCustomTextMetricsProvider,
 } from "@excalidraw/element";
 
@@ -308,9 +309,67 @@ export const buildFile = (
   files,
 });
 
+const FRAME_PADDING = 10;
+
+/**
+ * Upstream sizes a frame around its children AND every arrow bound to them,
+ * so an arrow leaving the frame stretches it across other frames. Size the
+ * frame from the listed children only (plus their bound labels), and give
+ * `frameId` only to those and to arrows that stay inside the frame.
+ */
+const fixFrames = (skeleton: any[], converted: any[]) => {
+  const byId = new Map(converted.map((e) => [e.id, e]));
+  for (const sk of skeleton) {
+    if (sk.type !== "frame" || !sk.children) {
+      continue;
+    }
+    const frame = byId.get(sk.id);
+    const children = (sk.children as string[])
+      .map((id) => byId.get(id))
+      .filter(Boolean);
+    if (!frame || !children.length) {
+      continue;
+    }
+    const childIds = new Set(children.map((c) => c.id));
+    const boxed = [...children];
+    for (const c of children) {
+      for (const b of c.boundElements ?? []) {
+        const bound = byId.get(b.id);
+        // labels live inside their shape; arrows are left out on purpose
+        if (bound && bound.type === "text") {
+          boxed.push(bound);
+        }
+      }
+    }
+    const [minX, minY, maxX, maxY] = getCommonBounds(boxed);
+    frame.x = minX - FRAME_PADDING;
+    frame.y = minY - FRAME_PADDING;
+    frame.width = maxX - minX + FRAME_PADDING * 2;
+    frame.height = maxY - minY + FRAME_PADDING * 2;
+
+    // upstream marked every bound arrow as inside this frame
+    for (const c of children) {
+      for (const b of c.boundElements ?? []) {
+        const bound = byId.get(b.id);
+        if (!bound || childIds.has(bound.id) || bound.type === "text") {
+          continue;
+        }
+        const ends = [bound.startBinding?.elementId, bound.endBinding?.elementId];
+        const stays = ends.every((id) => !id || childIds.has(id));
+        bound.frameId = stays ? frame.id : null;
+      }
+    }
+  }
+};
+
 /** Runs the fork's converter on upstream-format skeleton elements. */
-export const convert = (skeleton: any[]) =>
-  convertToExcalidrawElements(skeleton as any, { regenerateIds: false }) as any[];
+export const convert = (skeleton: any[]) => {
+  const converted = convertToExcalidrawElements(skeleton as any, {
+    regenerateIds: false,
+  }) as any[];
+  fixFrames(skeleton, converted);
+  return converted;
+};
 
 // ---------------------------------------------------------------- layout --
 
@@ -363,6 +422,20 @@ export const layoutReport = (
         warnings.push({
           code: "overlap",
           message: `${name(boxes[i].id)} overlaps ${name(boxes[j].id)} by ${Math.round(hit.w)}x${Math.round(hit.h)}px. Move one so there is a gap of 60px or more.`,
+        });
+      }
+    }
+  }
+
+  // frames: they may not touch each other (they cannot be nested)
+  const frames = live.filter((e) => e.type === "frame");
+  for (let i = 0; i < frames.length; i++) {
+    for (let j = i + 1; j < frames.length; j++) {
+      const hit = intersection(rectOf(frames[i]), rectOf(frames[j]));
+      if (hit) {
+        warnings.push({
+          code: "frame_overlap",
+          message: `${name(frames[i].id)} overlaps ${name(frames[j].id)} by ${Math.round(hit.w)}x${Math.round(hit.h)}px. Frames cannot overlap: move the elements of one of them so there is a gap of 60px or more.`,
         });
       }
     }

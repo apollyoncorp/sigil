@@ -18,7 +18,7 @@ strokeStyle solid|dashed|dotted   strokeWidth 1|2|4   roughness 0 clean|1 sketch
 rounded     rounded corners (rectangle/diamond), default true
 start, end  arrow only: { "id": "<shape id>" } attaches that end to the shape
 startArrowhead, endArrowhead  arrow|triangle|bar|dot|null
-children, name  frame only: ids it wraps, title
+children, name  frame only: ids it wraps (box = children + 10px padding, arrows ignored; frames must not overlap), title
 fontFamily  Excalifont (default) | Nunito | "Lilita One" | Cascadia
 
 ## Example: 3-node flowchart

@@ -135,6 +135,83 @@ describe("conversion", () => {
   });
 });
 
+describe("frames", () => {
+  // 3 frames in rows (y 60, 340-500, 800) with arrows between the rows
+  const rows = (): Skeleton[] => [
+    el({ type: "rectangle", id: "a1", x: 0, y: 60, width: 260, label: { text: "A1" } }),
+    el({ type: "rectangle", id: "a2", x: 320, y: 60, width: 260, label: { text: "A2" } }),
+    el({ type: "rectangle", id: "b1", x: 0, y: 340, width: 260, label: { text: "B1" } }),
+    el({ type: "rectangle", id: "b2", x: 320, y: 500, width: 260, label: { text: "B2" } }),
+    el({ type: "rectangle", id: "c1", x: 0, y: 800, width: 260, label: { text: "C1" } }),
+    el({ type: "arrow", start: { id: "a1" }, end: { id: "b1" } }),
+    el({ type: "arrow", start: { id: "a2" }, end: { id: "b2" } }),
+    el({ type: "arrow", start: { id: "b1" }, end: { id: "c1" } }),
+    el({ type: "arrow", start: { id: "a1" }, end: { id: "a2" } }),
+    el({ type: "frame", id: "fa", children: ["a1", "a2"], name: "Row A" }),
+    el({ type: "frame", id: "fb", children: ["b1", "b2"], name: "Row B" }),
+    el({ type: "frame", id: "fc", children: ["c1"], name: "Row C" }),
+  ];
+
+  it("sizes a frame from its children only, not from the arrows", async () => {
+    const out = await createDiagram({ elements: rows() });
+    expect(out.ok).toBe(true);
+    if (!out.ok) {
+      return;
+    }
+    const get = (id: string) => out.file.elements.find((e) => e.id === id);
+    const fa = get("fa");
+    // a1/a2 are 80px high at y 60; the arrows to row B must not stretch it
+    expect(fa.y).toBe(50);
+    expect(fa.height).toBeLessThan(120);
+    expect(fa.x).toBe(-10);
+    expect(fa.width).toBe(600);
+    const fb = get("fb");
+    expect(fb.y).toBe(330);
+    expect(fb.height).toBe(500 + 80 - 340 + 20);
+    const fc = get("fc");
+    expect(fc.y).toBe(790);
+    expect(fc.height).toBe(100);
+    // no frame overlaps another, and the report says nothing
+    expect(fa.y + fa.height).toBeLessThan(fb.y);
+    expect(fb.y + fb.height).toBeLessThan(fc.y);
+    expect(out.warnings).toEqual([]);
+  });
+
+  it("keeps frameId only on children and on arrows that stay inside", async () => {
+    const out = await createDiagram({ elements: rows() });
+    expect(out.ok).toBe(true);
+    if (!out.ok) {
+      return;
+    }
+    const arrows = out.file.elements.filter((e) => e.type === "arrow");
+    const byEnds = (s: string, e: string) =>
+      arrows.find((a) => a.startBinding?.elementId === s && a.endBinding?.elementId === e);
+    expect(byEnds("a1", "b1").frameId ?? null).toBeNull();
+    expect(byEnds("b1", "c1").frameId ?? null).toBeNull();
+    expect(byEnds("a1", "a2").frameId).toBe("fa");
+    const a1 = out.file.elements.find((e) => e.id === "a1");
+    expect(a1.frameId).toBe("fa");
+  });
+
+  it("warns when two frames overlap", async () => {
+    const out = await createDiagram({
+      elements: [
+        el({ type: "rectangle", id: "p", x: 0, y: 0, width: 200, height: 100 }),
+        el({ type: "rectangle", id: "q", x: 150, y: 50, width: 200, height: 100 }),
+        el({ type: "frame", id: "f1", children: ["p"], name: "One" }),
+        el({ type: "frame", id: "f2", children: ["q"], name: "Two" }),
+      ],
+    });
+    expect(out.ok).toBe(true);
+    if (!out.ok) {
+      return;
+    }
+    const codes = out.warnings.map((w) => w.code);
+    expect(codes).toContain("frame_overlap");
+    expect(out.warnings.find((w) => w.code === "frame_overlap")!.message).toMatch(/One|f1/);
+  });
+});
+
 describe("validation", () => {
   it("names the arrow and the missing id", async () => {
     const out = await createDiagram({
